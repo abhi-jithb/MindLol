@@ -10,6 +10,7 @@ import java.io.File
 class DebugProbeService : AccessibilityService() {
 
     private var logFile: File? = null
+    private var detectorLogFile: File? = null
     private var lastEventTimeMs = 0L
 
     override fun onServiceConnected() {
@@ -19,7 +20,8 @@ class DebugProbeService : AccessibilityService() {
         try {
             val externalDir = getExternalFilesDir(null) ?: filesDir
             logFile = File(externalDir, "tree_dump.log")
-            Log.i(TAG, "Log file location: ${logFile?.absolutePath}")
+            detectorLogFile = File(externalDir, "detector_events.log")
+            Log.i(TAG, "Log file locations: tree_dump=${logFile?.absolutePath}, detector_events=${detectorLogFile?.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize log file output", e)
         }
@@ -42,7 +44,7 @@ class DebugProbeService : AccessibilityService() {
         var detectionResult: DetectionResult? = null
         if (pkg == INSTAGRAM_PKG && rootNode != null) {
             detectionResult = InstagramReelDetector.detect(rootNode)
-            Log.i(TAG, "InstagramReelDetector result: $detectionResult")
+            DetectorEventLogger.logEvent(event, detectionResult, detectorLogFile)
         }
 
         NodeTreeDumper.dumpEventAndTree(event, rootNode, logFile, detectionResult)

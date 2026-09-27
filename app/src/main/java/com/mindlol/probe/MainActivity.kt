@@ -25,10 +25,13 @@ class MainActivity : AppCompatActivity() {
         }
         layout.addView(titleView)
 
+        val externalDir = getExternalFilesDir(null) ?: filesDir
+        val treeLogFile = File(externalDir, "tree_dump.log")
+        val detectorLogFile = File(externalDir, "detector_events.log")
+
         val infoView = TextView(this).apply {
-            val logFile = File(getExternalFilesDir(null) ?: filesDir, "tree_dump.log")
-            text = "Status: Disposable debug probe active.\nTarget Apps: Instagram & YouTube Shorts\nLog file: ${logFile.absolutePath}"
-            textSize = 14f
+            text = "Status: Debug Probe & Detector Active\nTarget Apps: Instagram & YouTube Shorts\n\nDetector Log:\n${detectorLogFile.absolutePath}\n\nTree Dump Log:\n${treeLogFile.absolutePath}"
+            textSize = 13f
             setPadding(0, 0, 0, 32)
         }
         layout.addView(infoView)

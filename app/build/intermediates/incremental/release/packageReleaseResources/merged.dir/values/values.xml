@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">MindLol Probe</string>
-    <string name="probe_service_description">Disposable debug accessibility service to log UI tree structures of video feeds on device.</string>
-    <string name="probe_service_name">MindLol Accessibility Probe</string>
-</resources>
