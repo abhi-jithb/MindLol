@@ -1,0 +1,6 @@
+R_DEF: Internal format may change without notice
+local
+string app_name
+string probe_service_description
+string probe_service_name
+xml probe_service_config

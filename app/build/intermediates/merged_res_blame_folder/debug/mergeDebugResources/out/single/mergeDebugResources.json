@@ -1,0 +1,6 @@
+[
+    {
+        "merged": "com.mindlol.probe.app-debug-23:/xml_probe_service_config.xml.flat",
+        "source": "com.mindlol.probe.app-main-25:/xml/probe_service_config.xml"
+    }
+]

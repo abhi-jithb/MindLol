@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.mindlol.probe.detector.InstagramReelDetectorTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-09-27T11:43:20" hostname="fedora" time="0.096">
+  <properties/>
+  <testcase name="test 3 - Reel tree with invisible offscreen media component does not select it" classname="com.mindlol.probe.detector.InstagramReelDetectorTest" time="0.054"/>
+  <testcase name="test 5 - Missing clips_viewer_view_pager returns isReel false" classname="com.mindlol.probe.detector.InstagramReelDetectorTest" time="0.0"/>
+  <testcase name="test 7 - Zero-width candidate is rejected" classname="com.mindlol.probe.detector.InstagramReelDetectorTest" time="0.001"/>
+  <testcase name="test author extraction logic" classname="com.mindlol.probe.detector.InstagramReelDetectorTest" time="0.01"/>
+  <testcase name="test 1 - Normal Instagram Reel tree is detected" classname="com.mindlol.probe.detector.InstagramReelDetectorTest" time="0.001"/>
+  <testcase name="test 2 - Instagram non-Reel home feed screen is not detected" classname="com.mindlol.probe.detector.InstagramReelDetectorTest" time="0.001"/>
+  <testcase name="test 8 - Partial candidate with insignificant overlap is rejected" classname="com.mindlol.probe.detector.InstagramReelDetectorTest" time="0.0"/>
+  <testcase name="test 6 - Missing clips_media_component returns isReel false" classname="com.mindlol.probe.detector.InstagramReelDetectorTest" time="0.001"/>
+  <testcase name="test 4 - Reel tree with multiple pager children selects active visible candidate only" classname="com.mindlol.probe.detector.InstagramReelDetectorTest" time="0.026"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
