@@ -3,6 +3,9 @@ package com.mindlol.probe
 import android.accessibilityservice.AccessibilityService
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import com.mindlol.probe.counter.CounterResult
+import com.mindlol.probe.counter.InstagramReelCounter
+import com.mindlol.probe.counter.ReelObservation
 import com.mindlol.probe.detector.DetectionResult
 import com.mindlol.probe.detector.InstagramReelDetector
 import java.io.File
@@ -12,6 +15,8 @@ class DebugProbeService : AccessibilityService() {
     private var logFile: File? = null
     private var detectorLogFile: File? = null
     private var lastEventTimeMs = 0L
+
+    private val reelCounter = InstagramReelCounter()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -42,9 +47,25 @@ class DebugProbeService : AccessibilityService() {
         val rootNode = rootInActiveWindow
 
         var detectionResult: DetectionResult? = null
+        var counterResult: CounterResult? = null
+
         if (pkg == INSTAGRAM_PKG && rootNode != null) {
-            detectionResult = InstagramReelDetector.detect(rootNode)
-            DetectorEventLogger.logEvent(event, detectionResult, detectorLogFile)
+            val detected = InstagramReelDetector.detect(rootNode)
+            detectionResult = detected
+
+            val eventTypeStr = AccessibilityEvent.eventTypeToString(event.eventType)
+            val eventClassStr = event.className?.toString() ?: ""
+
+            val obs = ReelObservation(
+                isReel = detected.isReel,
+                eventType = eventTypeStr,
+                eventClass = eventClassStr,
+                fromIndex = event.fromIndex,
+                toIndex = event.toIndex
+            )
+
+            counterResult = reelCounter.processObservation(obs)
+            DetectorEventLogger.logEvent(event, detected, counterResult, detectorLogFile)
         }
 
         NodeTreeDumper.dumpEventAndTree(event, rootNode, logFile, detectionResult)
