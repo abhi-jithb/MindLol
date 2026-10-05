@@ -1,0 +1,239 @@
+package com.mindlol.probe
+
+import android.accessibilityservice.AccessibilityService
+import android.util.Log
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import com.mindlol.probe.counter.InstagramReelCounter
+import com.mindlol.probe.counter.ReelObservation
+import com.mindlol.probe.detector.DetectionResult
+import com.mindlol.probe.detector.InstagramReelDetector
+import com.mindlol.probe.overlay.BlockOverlayManager
+import com.mindlol.probe.repository.ReelCounterRepository
+import com.mindlol.probe.repository.ReelCounterRepositoryImpl
+import com.mindlol.probe.repository.SharedPreferencesStore
+import java.io.File
+
+class DebugProbeService : AccessibilityService() {
+
+    private var logFile: File? = null
+    private var detectorLogFile: File? = null
+    private var counterLogFile: File? = null
+    private var lastEventTimeMs = 0L
+
+    private val reelCounter = InstagramReelCounter()
+    private lateinit var repository: ReelCounterRepository
+    private lateinit var overlayManager: BlockOverlayManager
+    private lateinit var floatingHudManager: com.mindlol.probe.overlay.FloatingCountHudManager
+    private var currentActivePackageName: String? = null
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Log.i(TAG, "DebugProbeService connected and initialized.")
+
+        try {
+            val externalDir = getExternalFilesDir(null) ?: filesDir
+            logFile = File(externalDir, "tree_dump.log")
+            detectorLogFile = File(externalDir, "detector_events.log")
+            counterLogFile = File(externalDir, "counter_events.log")
+            repository = ReelCounterRepositoryImpl(SharedPreferencesStore(this))
+            overlayManager = BlockOverlayManager(this)
+            floatingHudManager = com.mindlol.probe.overlay.FloatingCountHudManager(this, repository)
+            Log.i(TAG, "Log files initialized: tree_dump=${logFile?.absolutePath}, detector_events=${detectorLogFile?.absolutePath}, counter_events=${counterLogFile?.absolutePath}")
+            Log.i(TAG, "Repository initialized: todayCount=${repository.getTodayCount()}, dailyLimit=${repository.getDailyLimit()}, limitReached=${repository.isLimitReached()}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize log file outputs, repository, overlay manager, or HUD manager", e)
+        }
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null) return
+
+        val rawEventPkg = event.packageName?.toString() ?: ""
+        val activePkg = resolveActivePackage(event)
+        val eventTypeStr = AccessibilityEvent.eventTypeToString(event.eventType)
+
+        // Update overlay and HUD decision state
+        if (::repository.isInitialized && ::overlayManager.isInitialized) {
+            val isLimitReached = repository.isLimitReached()
+            val hasPermission = overlayManager.hasOverlayPermission()
+            val appEnabled = isAppEnabled(activePkg)
+            val isTarget = activePkg != null &&
+                activePkg in com.mindlol.probe.overlay.BlockOverlayDecisionEngine.DEFAULT_TARGET_PACKAGES &&
+                appEnabled
+
+            val effectivePkg = if (appEnabled) activePkg else null
+            overlayManager.updateOverlayState(effectivePkg, isLimitReached)
+
+            // Hide HUD immediately if user leaves target packages or app is disabled
+            if (!isTarget && ::floatingHudManager.isInitialized) {
+                floatingHudManager.updateHudVisibility(
+                    activePackageName = effectivePkg,
+                    isShortVideoSurface = false,
+                    isLimitReached = isLimitReached,
+                    isTestUnlocked = overlayManager.isTestUnlocked
+                )
+            }
+        }
+
+        if (!isAppEnabled(rawEventPkg)) return
+
+        val eventClassStr = event.className?.toString() ?: ""
+
+        val now = System.currentTimeMillis()
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED && (now - lastEventTimeMs) < CONTENT_CHANGE_DEBOUNCE_MS) {
+            return
+        }
+        lastEventTimeMs = now
+
+        val activeRoot = rootInActiveWindow
+        val rootNode = getBestRootNode(event)
+        val rootClassStr = rootNode?.className?.toString() ?: "null"
+        val isRootFromActive = (rootNode != null && rootNode == activeRoot)
+
+        Log.d(
+            TAG,
+            "[Pipeline 1-4] Event=$eventTypeStr | pkg=$rawEventPkg | eventClass=$eventClassStr | activeRoot=${activeRoot != null} | rootClass=$rootClassStr | sourceFallback=${!isRootFromActive}"
+        )
+
+        var detectionResult: DetectionResult? = null
+
+        if (rawEventPkg == INSTAGRAM_PKG) {
+            val detected = InstagramReelDetector.detect(rootNode)
+            detectionResult = detected
+
+            Log.d(
+                TAG,
+                "[Pipeline 5-7] isReel=${detected.isReel} | evidence=${detected.evidence} | pagerBounds=${detected.pagerBounds?.toShortString()} | activeBounds=${detected.activeReelBounds?.toShortString()}"
+            )
+
+            if (::floatingHudManager.isInitialized && ::repository.isInitialized) {
+                floatingHudManager.updateHudVisibility(
+                    activePackageName = activePkg,
+                    isShortVideoSurface = detected.isReel,
+                    isLimitReached = repository.isLimitReached(),
+                    isTestUnlocked = overlayManager.isTestUnlocked
+                )
+            }
+
+            val obs = ReelObservation(
+                isReel = detected.isReel,
+                eventType = eventTypeStr,
+                eventClass = eventClassStr,
+                fromIndex = event.fromIndex,
+                toIndex = event.toIndex
+            )
+
+            val counterResult = reelCounter.processObservation(obs)
+
+            if (counterResult.isCounted && ::repository.isInitialized) {
+                repository.incrementCount()
+                // Re-evaluate overlay and HUD state immediately upon new increment
+                if (::overlayManager.isInitialized) {
+                    overlayManager.updateOverlayState(activePkg, repository.isLimitReached())
+                }
+                if (::floatingHudManager.isInitialized) {
+                    floatingHudManager.updateHudVisibility(
+                        activePackageName = activePkg,
+                        isShortVideoSurface = detected.isReel,
+                        isLimitReached = repository.isLimitReached(),
+                        isTestUnlocked = overlayManager.isTestUnlocked
+                    )
+                }
+            }
+
+            val todayCount = if (::repository.isInitialized) repository.getTodayCount() else 0
+            val dailyLimit = if (::repository.isInitialized) repository.getDailyLimit() else 0
+            val limitReached = if (::repository.isInitialized) repository.isLimitReached() else false
+
+            Log.d(
+                TAG,
+                "[Pipeline 8-10] Obs(isReel=${obs.isReel}, idx=${obs.fromIndex}->${obs.toIndex}) -> CounterResult(isCounted=${counterResult.isCounted}, sessionCount=${counterResult.sessionCount}, todayCount=$todayCount/$dailyLimit, limitReached=$limitReached, dir=${counterResult.direction}, evidence=${counterResult.evidence})"
+            )
+
+            if (BuildConfig.DEBUG) {
+                DetectorEventLogger.logDetectorEvent(event, detected, detectorLogFile)
+                DetectorEventLogger.logCounterEvent(event, counterResult, detected.isReel, counterLogFile)
+                Log.d(TAG, "[Pipeline 11] Recorded detection and counter events to debug log files.")
+            }
+        }
+
+        if (BuildConfig.DEBUG) {
+            NodeTreeDumper.dumpEventAndTree(event, rootNode, logFile, detectionResult)
+        }
+
+        if (rootNode != null && rootNode != rootInActiveWindow) {
+            try {
+                rootNode.recycle()
+            } catch (_: Throwable) {
+                // Ignore safe recycling exception
+            }
+        }
+    }
+
+    private fun getBestRootNode(event: AccessibilityEvent): AccessibilityNodeInfo? {
+        return try {
+            val targetPkg = event.packageName?.toString()
+            val activeRoot = rootInActiveWindow
+            if (activeRoot != null) {
+                val rootPkg = activeRoot.packageName?.toString()
+                if (rootPkg == targetPkg || rootPkg == "android" || rootPkg == INSTAGRAM_PKG || rootPkg == YOUTUBE_PKG) {
+                    return activeRoot
+                }
+            }
+
+            // Fallback to event source node hierarchy if active window root is from SystemUI or null
+            val source = event.source ?: return activeRoot
+            var current = source
+            while (true) {
+                val parent = current.parent ?: break
+                current = parent
+            }
+            current
+        } catch (e: Throwable) {
+            Log.w(TAG, "Safely caught exception while acquiring root node: ${e.message}")
+            null
+        }
+    }
+
+    private fun resolveActivePackage(event: AccessibilityEvent): String? {
+        val resolved = com.mindlol.probe.overlay.ActivePackageResolver.resolveActivePackage(
+            eventPackageName = event.packageName?.toString(),
+            currentActivePackageName = currentActivePackageName,
+            selfPackageName = packageName
+        )
+        currentActivePackageName = resolved
+        return resolved
+    }
+
+    private fun isAppEnabled(pkgName: String?): Boolean {
+        if (!::repository.isInitialized || pkgName == null) return false
+        return when (pkgName) {
+            INSTAGRAM_PKG -> repository.isInstagramEnabled()
+            YOUTUBE_PKG -> repository.isYouTubeEnabled()
+            else -> false
+        }
+    }
+
+    override fun onInterrupt() {
+        Log.w(TAG, "DebugProbeService interrupted.")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.i(TAG, "DebugProbeService destroyed.")
+        if (::overlayManager.isInitialized) {
+            overlayManager.hideOverlay()
+        }
+        if (::floatingHudManager.isInitialized) {
+            floatingHudManager.cleanup()
+        }
+    }
+
+    companion object {
+        private const val TAG = "TreeLoggerService"
+        private const val INSTAGRAM_PKG = "com.instagram.android"
+        private const val YOUTUBE_PKG = "com.google.android.youtube"
+        private const val CONTENT_CHANGE_DEBOUNCE_MS = 250L
+    }
+}

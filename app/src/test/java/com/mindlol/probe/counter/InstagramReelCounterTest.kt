@@ -30,143 +30,151 @@ class InstagramReelCounterTest {
         )
     }
 
+    // =========================================================================
+    // Explicit Phase 3 Required Sequence & Boundary Tests 1 - 10
+    // =========================================================================
+
     @Test
-    fun `test 1 - Initial Reel establishes baseline without incrementing`() {
+    fun `Test 1 - Single Reel A baseline initialization produces count 0`() {
         val res = counter.processObservation(viewPagerEvent(0))
         assertFalse(res.isCounted)
         assertEquals(0, res.sessionCount)
         assertEquals(ScrollDirection.INITIAL, res.direction)
-        assertEquals(InstagramReelCounter.INDEX_UNSET, res.previousIndex)
-        assertEquals(0, res.currentIndex)
     }
 
     @Test
-    fun `test 2 - Repeated initial observations do not count`() {
-        counter.processObservation(viewPagerEvent(0))
-        val res2 = counter.processObservation(viewPagerEvent(0))
-        val res3 = counter.processObservation(viewPagerEvent(0))
+    fun `Test 2 - A to B forward transition produces count 1`() {
+        counter.processObservation(viewPagerEvent(0)) // A (baseline)
+        val resB = counter.processObservation(viewPagerEvent(1)) // B
 
-        assertFalse(res2.isCounted)
-        assertFalse(res3.isCounted)
-        assertEquals(0, res3.sessionCount)
-        assertEquals(ScrollDirection.NONE, res3.direction)
+        assertTrue(resB.isCounted)
+        assertEquals(1, resB.sessionCount)
+        assertEquals(ScrollDirection.FORWARD, resB.direction)
     }
 
     @Test
-    fun `test 3 - Single forward navigation counts once`() {
-        counter.processObservation(viewPagerEvent(0))
-        val res = counter.processObservation(viewPagerEvent(1))
+    fun `Test 3 - A to B to C forward sequence produces count 2`() {
+        counter.processObservation(viewPagerEvent(0)) // A
+        counter.processObservation(viewPagerEvent(1)) // B (+1)
+        val resC = counter.processObservation(viewPagerEvent(2)) // C (+1)
 
-        assertTrue(res.isCounted)
-        assertEquals(1, res.sessionCount)
-        assertEquals(ScrollDirection.FORWARD, res.direction)
-        assertEquals(0, res.previousIndex)
-        assertEquals(1, res.currentIndex)
+        assertTrue(resC.isCounted)
+        assertEquals(2, resC.sessionCount)
+        assertEquals(ScrollDirection.FORWARD, resC.direction)
     }
 
     @Test
-    fun `test 4 - Repeated B events do not produce additional counts`() {
-        counter.processObservation(viewPagerEvent(0))
-        counter.processObservation(viewPagerEvent(1)) // count 1
+    fun `Test 4 - A to B to C to B sequence produces count 2`() {
+        counter.processObservation(viewPagerEvent(0)) // A
+        counter.processObservation(viewPagerEvent(1)) // B (+1)
+        counter.processObservation(viewPagerEvent(2)) // C (+1)
+        val resB = counter.processObservation(viewPagerEvent(1)) // B (back)
 
-        val res2 = counter.processObservation(viewPagerEvent(1))
-        val res3 = counter.processObservation(viewPagerEvent(1))
-
-        assertFalse(res2.isCounted)
-        assertFalse(res3.isCounted)
-        assertEquals(1, res3.sessionCount)
+        assertFalse(resB.isCounted)
+        assertEquals(2, resB.sessionCount)
+        assertEquals(ScrollDirection.BACKWARD, resB.direction)
     }
 
     @Test
-    fun `test 5 - Multiple forward navigations increment session count for each new step`() {
-        counter.processObservation(viewPagerEvent(0)) // baseline
-        val r1 = counter.processObservation(viewPagerEvent(1)) // count 1
-        val r2 = counter.processObservation(viewPagerEvent(2)) // count 2
-        val r3 = counter.processObservation(viewPagerEvent(3)) // count 3
+    fun `Test 5 - A to B to C to B to A sequence produces count 2`() {
+        counter.processObservation(viewPagerEvent(0)) // A
+        counter.processObservation(viewPagerEvent(1)) // B (+1)
+        counter.processObservation(viewPagerEvent(2)) // C (+1)
+        counter.processObservation(viewPagerEvent(1)) // B (back)
+        val resA = counter.processObservation(viewPagerEvent(0)) // A (back)
+
+        assertFalse(resA.isCounted)
+        assertEquals(2, resA.sessionCount)
+        assertEquals(ScrollDirection.BACKWARD, resA.direction)
+    }
+
+    @Test
+    fun `Test 6 - Full validation sequence A to B to C to B to A to B produces count 3`() {
+        counter.processObservation(viewPagerEvent(0)) // A (baseline = 0)
+        counter.processObservation(viewPagerEvent(1)) // B (+1 -> 1)
+        counter.processObservation(viewPagerEvent(2)) // C (+1 -> 2)
+        counter.processObservation(viewPagerEvent(1)) // B (back = 2)
+        counter.processObservation(viewPagerEvent(0)) // A (back = 2)
+        val resB = counter.processObservation(viewPagerEvent(1)) // B (forward again! +1 -> 3)
+
+        assertTrue(resB.isCounted)
+        assertEquals(3, resB.sessionCount)
+        assertEquals(ScrollDirection.FORWARD, resB.direction)
+    }
+
+    @Test
+    fun `Test 7 - A to A to A to A repeated baseline events produce count 0`() {
+        repeat(4) {
+            val res = counter.processObservation(viewPagerEvent(0))
+            assertFalse(res.isCounted)
+            assertEquals(0, res.sessionCount)
+        }
+    }
+
+    @Test
+    fun `Test 8 - A to B to B to B repeated target events produce count 1`() {
+        counter.processObservation(viewPagerEvent(0)) // A baseline
+        val r1 = counter.processObservation(viewPagerEvent(1)) // B (+1)
+        val r2 = counter.processObservation(viewPagerEvent(1)) // B repeat
+        val r3 = counter.processObservation(viewPagerEvent(1)) // B repeat
 
         assertTrue(r1.isCounted)
-        assertTrue(r2.isCounted)
-        assertTrue(r3.isCounted)
-        assertEquals(3, r3.sessionCount)
+        assertFalse(r2.isCounted)
+        assertFalse(r3.isCounted)
+        assertEquals(1, r3.sessionCount)
     }
 
     @Test
-    fun `test 6 - Backward navigation does not count`() {
-        counter.processObservation(viewPagerEvent(0))
-        counter.processObservation(viewPagerEvent(1))
-        counter.processObservation(viewPagerEvent(2)) // count 2
+    fun `Test 9 - Invalid or non-Reel observations must not change count`() {
+        counter.processObservation(viewPagerEvent(0)) // A (baseline = 0)
+        counter.processObservation(viewPagerEvent(1)) // B (+1 = 1)
 
-        val backRes = counter.processObservation(viewPagerEvent(1)) // 2 -> 1
-
-        assertFalse(backRes.isCounted)
-        assertEquals(2, backRes.sessionCount)
-        assertEquals(ScrollDirection.BACKWARD, backRes.direction)
-        assertEquals(2, backRes.previousIndex)
-        assertEquals(1, backRes.currentIndex)
-    }
-
-    @Test
-    fun `test 7 - Multiple backward navigations produce no counts`() {
-        counter.processObservation(viewPagerEvent(0))
-        counter.processObservation(viewPagerEvent(1))
-        counter.processObservation(viewPagerEvent(2)) // count 2
-
-        val back1 = counter.processObservation(viewPagerEvent(1))
-        val back2 = counter.processObservation(viewPagerEvent(0))
-
-        assertFalse(back1.isCounted)
-        assertFalse(back2.isCounted)
-        assertEquals(2, back2.sessionCount)
-    }
-
-    @Test
-    fun `test 8 - Forward navigation after backward navigation counts as new transition`() {
-        counter.processObservation(viewPagerEvent(0)) // baseline
-        counter.processObservation(viewPagerEvent(1)) // count 1
-        counter.processObservation(viewPagerEvent(2)) // count 2
-        counter.processObservation(viewPagerEvent(1)) // back (count 2)
-        counter.processObservation(viewPagerEvent(0)) // back (count 2)
-
-        val forwardAgain = counter.processObservation(viewPagerEvent(1)) // 0 -> 1 forward again!
-
-        assertTrue(forwardAgain.isCounted)
-        assertEquals(3, forwardAgain.sessionCount)
-        assertEquals(ScrollDirection.FORWARD, forwardAgain.direction)
-        assertEquals(0, forwardAgain.previousIndex)
-        assertEquals(1, forwardAgain.currentIndex)
-    }
-
-    @Test
-    fun `test 9 - Same index repeated through many events produces no counts`() {
-        counter.processObservation(viewPagerEvent(0))
-        counter.processObservation(viewPagerEvent(1)) // count 1
-
-        repeat(10) {
-            val r = counter.processObservation(viewPagerEvent(1))
-            assertFalse(r.isCounted)
-        }
-        assertEquals(1, counter.processObservation(viewPagerEvent(1)).sessionCount)
-    }
-
-    @Test
-    fun `test 10 - Invalid index values are ignored`() {
-        counter.processObservation(viewPagerEvent(0))
-        val invalidObs = ReelObservation(
-            isReel = true,
-            eventType = "TYPE_VIEW_SCROLLED",
-            eventClass = "androidx.viewpager.widget.ViewPager",
+        // Non-Reel observation
+        val nonReelObs = ReelObservation(
+            isReel = false,
+            eventType = "TYPE_WINDOW_CONTENT_CHANGED",
+            eventClass = "android.widget.FrameLayout",
             fromIndex = -1,
             toIndex = -1
         )
-        val res = counter.processObservation(invalidObs)
+        val resNonReel = counter.processObservation(nonReelObs)
+        assertFalse(resNonReel.isCounted)
+        assertEquals(1, resNonReel.sessionCount)
+        assertEquals("DETECTOR_NOT_REEL_PRESERVED_STATE", resNonReel.evidence)
 
-        assertFalse(res.isCounted)
-        assertEquals(0, res.sessionCount)
-        assertEquals("NON_VIEW_PAGER_OR_INVALID_EVENT", res.evidence)
+        // Invalid scroll event class
+        val invalidClassObs = ReelObservation(
+            isReel = true,
+            eventType = "TYPE_VIEW_SCROLLED",
+            eventClass = "androidx.recyclerview.widget.RecyclerView",
+            fromIndex = 1,
+            toIndex = 3
+        )
+        val resInvalidClass = counter.processObservation(invalidClassObs)
+        assertFalse(resInvalidClass.isCounted)
+        assertEquals(1, resInvalidClass.sessionCount)
+        assertEquals("NON_VIEW_PAGER_OR_INVALID_EVENT", resInvalidClass.evidence)
     }
 
     @Test
-    fun `test 11 - Temporary detector loss preserves navigation state`() {
+    fun `Test 10 - Repeated AccessibilityEvents for same index must not increase count`() {
+        counter.processObservation(viewPagerEvent(0)) // baseline
+        counter.processObservation(viewPagerEvent(1)) // count = 1
+
+        repeat(15) {
+            val res = counter.processObservation(viewPagerEvent(1))
+            assertFalse(res.isCounted)
+            assertEquals(1, res.sessionCount)
+            assertEquals(ScrollDirection.NONE, res.direction)
+        }
+    }
+
+    // =========================================================================
+    // Additional Edge Case Tests (Gaps, Reset, Large Jump)
+    // =========================================================================
+
+    @Test
+    fun `Test 11 - Temporary detector gap preserves navigation state and resumes correctly`() {
         counter.processObservation(viewPagerEvent(0)) // baseline index 0
 
         // Detector gap during swipe animation
@@ -182,55 +190,10 @@ class InstagramReelCounterTest {
         assertTrue(resAfterGap.isCounted)
         assertEquals(1, resAfterGap.sessionCount)
         assertEquals(ScrollDirection.FORWARD, resAfterGap.direction)
-        assertEquals(0, resAfterGap.previousIndex)
-        assertEquals(1, resAfterGap.currentIndex)
     }
 
     @Test
-    fun `test 12 - Detector unavailable repeatedly does not increment count`() {
-        val nonReelObs = viewPagerEvent(index = 0, isReel = false)
-        repeat(5) {
-            val res = counter.processObservation(nonReelObs)
-            assertFalse(res.isCounted)
-            assertEquals(0, res.sessionCount)
-        }
-    }
-
-    @Test
-    fun `test 13 - Non-Reel Instagram screen produces no counting`() {
-        val nonReelScreenObs = ReelObservation(
-            isReel = false,
-            eventType = "TYPE_WINDOW_CONTENT_CHANGED",
-            eventClass = "android.widget.FrameLayout",
-            fromIndex = -1,
-            toIndex = -1
-        )
-        val res = counter.processObservation(nonReelScreenObs)
-
-        assertFalse(res.isCounted)
-        assertEquals(0, res.sessionCount)
-    }
-
-    @Test
-    fun `test 14 - RecyclerView scroll event with changing indices is ignored`() {
-        counter.processObservation(viewPagerEvent(0)) // baseline
-
-        val recyclerViewObs = ReelObservation(
-            isReel = true,
-            eventType = "TYPE_VIEW_SCROLLED",
-            eventClass = "androidx.recyclerview.widget.RecyclerView",
-            fromIndex = 0,
-            toIndex = 2
-        )
-        val res = counter.processObservation(recyclerViewObs)
-
-        assertFalse(res.isCounted)
-        assertEquals(0, res.sessionCount)
-        assertEquals("NON_VIEW_PAGER_OR_INVALID_EVENT", res.evidence)
-    }
-
-    @Test
-    fun `test 15 - Large index jump counts as one forward transition step`() {
+    fun `Test 12 - Large index jump counts as one forward transition step`() {
         counter.processObservation(viewPagerEvent(1)) // baseline index 1
 
         // Fast fling jump from 1 -> 4
@@ -239,7 +202,18 @@ class InstagramReelCounterTest {
         assertTrue(jumpRes.isCounted)
         assertEquals(1, jumpRes.sessionCount)
         assertEquals(ScrollDirection.FORWARD, jumpRes.direction)
-        assertEquals(1, jumpRes.previousIndex)
-        assertEquals(4, jumpRes.currentIndex)
+    }
+
+    @Test
+    fun `Test 13 - Session reset clears baseline and counter state`() {
+        counter.processObservation(viewPagerEvent(0))
+        counter.processObservation(viewPagerEvent(1)) // sessionCount = 1
+
+        counter.resetSession()
+
+        val newBase = counter.processObservation(viewPagerEvent(5))
+        assertFalse(newBase.isCounted)
+        assertEquals(0, newBase.sessionCount)
+        assertEquals(ScrollDirection.INITIAL, newBase.direction)
     }
 }

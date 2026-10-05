@@ -207,4 +207,36 @@ class InstagramReelDetectorTest {
         assertEquals("john_doe", InstagramReelDetector.extractAuthorFromDesc(desc2))
         assertNull(InstagramReelDetector.extractAuthorFromDesc(desc3))
     }
+
+    @Test
+    fun `test 9 - Null root node returns isReel false with NULL_ROOT evidence`() {
+        val result = InstagramReelDetector.detect(null as TestNodeInfo?)
+        assertFalse(result.isReel)
+        assertEquals("NULL_ROOT", result.evidence)
+    }
+
+    @Test
+    fun `test 10 - Non-Instagram package returns isReel false`() {
+        val root = TestNodeInfo(
+            packageName = "com.android.chrome",
+            childrenList = emptyList()
+        )
+        val result = InstagramReelDetector.detect(root)
+        assertFalse(result.isReel)
+        assertTrue(result.evidence.contains("NON_INSTAGRAM_PACKAGE"))
+    }
+
+    @Test
+    fun `test 11 - Empty ViewPager bounds return isReel false`() {
+        val viewPager = TestNodeInfo(
+            viewIdResourceName = "com.instagram.android:id/clips_viewer_view_pager",
+            isScrollable = true,
+            boundsInScreen = createRect(0, 0, 0, 0)
+        )
+        val root = TestNodeInfo(childrenList = listOf(viewPager))
+
+        val result = InstagramReelDetector.detect(root)
+        assertFalse(result.isReel)
+        assertTrue(result.evidence.contains("INVALID_PAGER_BOUNDS"))
+    }
 }

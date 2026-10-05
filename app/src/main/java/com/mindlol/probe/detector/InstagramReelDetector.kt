@@ -39,8 +39,8 @@ object InstagramReelDetector {
         }
 
         val packageName = root.packageName
-        if (packageName != null && packageName != INSTAGRAM_PACKAGE) {
-            return DetectionResult(isReel = false, evidence = "NON_INSTAGRAM_PACKAGE")
+        if (packageName != null && packageName != INSTAGRAM_PACKAGE && packageName != "android") {
+            return DetectionResult(isReel = false, evidence = "NON_INSTAGRAM_PACKAGE ($packageName)")
         }
 
         // 1. Locate Instagram Reel ViewPager container node
@@ -51,7 +51,7 @@ object InstagramReelDetector {
 
         if (rectIsEmpty(pagerBounds)) {
             recycleNode(pagerNode, root)
-            return DetectionResult(isReel = false, evidence = "INVALID_PAGER_BOUNDS")
+            return DetectionResult(isReel = false, evidence = "INVALID_PAGER_BOUNDS (bounds=$pagerBounds)")
         }
 
         // 2. Collect candidate media component nodes within the ViewPager
@@ -73,7 +73,16 @@ object InstagramReelDetector {
         }
 
         val activeBounds = activeCandidate.boundsInScreen
-        val authorName = extractAuthorFromDesc(activeCandidate.contentDescription?.toString())
+        var authorName = extractAuthorFromDesc(activeCandidate.contentDescription?.toString())
+        if (authorName == null) {
+            for (candidate in mediaCandidates) {
+                val candidateAuthor = extractAuthorFromDesc(candidate.contentDescription?.toString())
+                if (candidateAuthor != null) {
+                    authorName = candidateAuthor
+                    break
+                }
+            }
+        }
 
         recycleNodes(mediaCandidates, root)
 
@@ -90,6 +99,14 @@ object InstagramReelDetector {
     private fun findViewPagerNode(root: NodeInfo): NodeInfo? {
         val nodesById = root.findByViewId(VIEW_PAGER_ID)
         if (nodesById.isNotEmpty()) {
+            for (node in nodesById) {
+                if (!rectIsEmpty(node.boundsInScreen)) {
+                    for (other in nodesById) {
+                        if (other !== node) recycleNode(other, root)
+                    }
+                    return node
+                }
+            }
             val primary = nodesById.first()
             for (i in 1 until nodesById.size) {
                 recycleNode(nodesById[i], root)
@@ -107,14 +124,16 @@ object InstagramReelDetector {
         if (resId.contains("clips_viewer_view_pager") ||
             (node.isScrollable && (className.endsWith("ViewPager") || className.contains("RecyclerView")) && resId.contains("clips"))
         ) {
-            return node
+            if (!rectIsEmpty(node.boundsInScreen)) {
+                return node
+            }
         }
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val found = searchViewPagerFallback(child)
             if (found != null) {
-                if (found != child) {
+                if (found !== child) {
                     recycleNode(child, node)
                 }
                 return found
@@ -139,9 +158,6 @@ object InstagramReelDetector {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             collectMediaCandidates(child, results)
-            if (!results.contains(child)) {
-                recycleNode(child, node)
-            }
         }
     }
 
@@ -153,8 +169,6 @@ object InstagramReelDetector {
         var bestCandidate: NodeInfo? = null
 
         for (candidate in candidates) {
-            if (!candidate.isVisibleToUser) continue
-
             val bounds = candidate.boundsInScreen
             if (rectIsEmpty(bounds)) continue
 

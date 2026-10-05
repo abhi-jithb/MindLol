@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MindLol</string>
+    <string name="probe_service_name">MindLol Accessibility</string>
+    <string name="probe_service_description">MindLol accessibility service detects short-video consumption on your device to help you manage daily limits.</string>
+</resources>

@@ -3,15 +3,21 @@ package com.mindlol.probe.counter
 /**
  * Pure, stateful direction-aware counter for Instagram Reel ViewPager navigation transitions.
  *
- * Tracks ViewPager index progression across accessibility events to determine whether
- * a user has navigated forward to a NEW Reel.
+ * Tracks relative ViewPager index progression across accessibility events to determine whether
+ * a user has navigated forward to a NEW Reel in the active session.
  *
- * Rules:
- * - Initial Reel observation establishes baseline state (count = 0).
- * - Repeated events with the same index do NOT count.
- * - Backward transitions (swiping back to rewatch) do NOT count.
- * - Only confirmed forward index transitions (currentIndex > prevIndex) increment the session count.
- * - Temporary detector gaps (`isReel = false`) preserve previous navigation state without resetting.
+ * Note on Identity & Semantics:
+ * - This counter relies on relative ViewPager index transitions (`toIndex > lastConfirmedIndex`)
+ *   within a session.
+ * - The ViewPager index is a position marker in the viewer pager, NOT a globally unique Reel ID.
+ * - Creator usernames are NOT used as Reel identities (the same creator can post multiple reels).
+ *
+ * Counter Rules:
+ * - First valid Reel: baseline initialization only (count = 0).
+ * - Forward transition (`currentIndex > prevIndex`): count +1.
+ * - Backward transition (`currentIndex < prevIndex`, rewatching): count +0.
+ * - Same index (`currentIndex == prevIndex`): count +0.
+ * - Invalid/non-Reel surface (`isReel = false`): preserve state, count +0.
  */
 class InstagramReelCounter {
 
