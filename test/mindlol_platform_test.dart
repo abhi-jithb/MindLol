@@ -42,6 +42,42 @@ void main() {
       expect(map['accessibilityEnabled'], isTrue);
       expect(map['overlayPermissionGranted'], isFalse);
     });
+
+    test('TrackingHealthState maps correctly to and from map', () {
+      final map = {
+        'todayCount': 10,
+        'dailyLimit': 25,
+        'limitReached': false,
+        'accessibilityEnabled': true,
+        'overlayPermissionGranted': true,
+        'trackingHealthState': 'TRACKING',
+        'trackingHealthTitle': 'Actively tracking',
+        'trackingHealthMessage': 'Currently monitoring YouTube Shorts.',
+      };
+
+      final status = MindLolStatus.fromMap(map);
+      expect(status.trackingHealthState, equals(TrackingHealthState.tracking));
+      expect(status.trackingHealthTitle, equals('Actively tracking'));
+      expect(status.trackingHealthMessage,
+          equals('Currently monitoring YouTube Shorts.'));
+
+      final outMap = status.toMap();
+      expect(outMap['trackingHealthState'], equals('TRACKING'));
+    });
+
+    test('TrackingHealthState defaults to permissionRequired when access is disabled', () {
+      final map = {
+        'todayCount': 0,
+        'dailyLimit': 20,
+        'limitReached': false,
+        'accessibilityEnabled': false,
+        'overlayPermissionGranted': true,
+      };
+
+      final status = MindLolStatus.fromMap(map);
+      expect(status.trackingHealthState,
+          equals(TrackingHealthState.permissionRequired));
+    });
   });
 
   group('MindLolPlatform', () {

@@ -229,6 +229,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               accessibilityEnabled: _status?.accessibilityEnabled ?? true,
               overlayPermissionGranted:
                   _status?.overlayPermissionGranted ?? true,
+              trackingHealthState: _status?.trackingHealthState,
+              trackingHealthMessage: _status?.trackingHealthMessage,
               platform: widget.platform,
             ),
 

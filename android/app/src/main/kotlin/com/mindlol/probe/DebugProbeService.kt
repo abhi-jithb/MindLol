@@ -43,6 +43,7 @@ class DebugProbeService : AccessibilityService() {
             repository = ReelCounterRepositoryImpl(SharedPreferencesStore(this))
             overlayManager = BlockOverlayManager(this)
             floatingHudManager = com.mindlol.probe.overlay.FloatingCountHudManager(this, repository)
+            com.mindlol.probe.health.TrackingHealthManager.onServiceConnected()
             Log.i(TAG, "Log files initialized: tree_dump=${logFile?.absolutePath}, detector_events=${detectorLogFile?.absolutePath}, counter_events=${counterLogFile?.absolutePath}")
             Log.i(TAG, "Repository initialized: todayCount=${repository.getTodayCount()}, dailyLimit=${repository.getDailyLimit()}, limitReached=${repository.isLimitReached()}")
         } catch (e: Exception) {
@@ -80,7 +81,10 @@ class DebugProbeService : AccessibilityService() {
             }
         }
 
-        if (!isAppEnabled(rawEventPkg)) return
+        if (!isAppEnabled(rawEventPkg)) {
+            com.mindlol.probe.health.TrackingHealthManager.updateSurfaceState(activePkg, false, "NON_TARGET_APP")
+            return
+        }
 
         val eventClassStr = event.className?.toString() ?: ""
 
@@ -105,6 +109,7 @@ class DebugProbeService : AccessibilityService() {
         if (rawEventPkg == INSTAGRAM_PKG) {
             val detected = InstagramReelDetector.detect(rootNode)
             detectionResult = detected
+            com.mindlol.probe.health.TrackingHealthManager.updateSurfaceState(rawEventPkg, detected.isReel, detected.evidence)
 
             Log.d(
                 TAG,
@@ -163,6 +168,7 @@ class DebugProbeService : AccessibilityService() {
         } else if (rawEventPkg == YOUTUBE_PKG) {
             val detected = com.mindlol.probe.detector.YouTubeShortsDetector.detect(rootNode)
             detectionResult = detected
+            com.mindlol.probe.health.TrackingHealthManager.updateSurfaceState(rawEventPkg, detected.isReel, detected.evidence)
 
             Log.d(
                 TAG,
@@ -293,6 +299,7 @@ class DebugProbeService : AccessibilityService() {
         if (::floatingHudManager.isInitialized) {
             floatingHudManager.cleanup()
         }
+        com.mindlol.probe.health.TrackingHealthManager.onServiceDisconnected()
     }
 
     companion object {

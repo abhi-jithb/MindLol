@@ -1,0 +1,19 @@
+{
+  "packageName": "com.instagram.android",
+  "className": "android.widget.FrameLayout",
+  "bounds": [0, 0, 1080, 2400],
+  "children": [
+    {
+      "packageName": "com.instagram.android",
+      "viewId": "com.instagram.android:id/clips_viewer_view_pager",
+      "className": "androidx.viewpager2.widget.ViewPager2",
+      "bounds": [0, 0, 1080, 2400]
+    },
+    {
+      "packageName": "com.instagram.android",
+      "viewId": "com.instagram.android:id/layout_comment_thread",
+      "className": "android.widget.FrameLayout",
+      "bounds": [0, 800, 1080, 2400]
+    }
+  ]
+}

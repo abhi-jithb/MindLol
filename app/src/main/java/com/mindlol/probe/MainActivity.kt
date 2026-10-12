@@ -2,133 +2,195 @@ package com.mindlol.probe
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Bundle
 import android.provider.Settings
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import android.text.TextUtils
+import com.mindlol.probe.overlay.BlockOverlayManager
 import com.mindlol.probe.repository.ReelCounterRepository
 import com.mindlol.probe.repository.ReelCounterRepositoryImpl
 import com.mindlol.probe.repository.SharedPreferencesStore
-import java.io.File
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : FlutterActivity() {
 
     private lateinit var repository: ReelCounterRepository
-    private lateinit var statusTextView: TextView
+    private lateinit var overlayManager: BlockOverlayManager
+    private var eventSink: EventChannel.EventSink? = null
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
 
         repository = ReelCounterRepositoryImpl(SharedPreferencesStore(this))
+        overlayManager = BlockOverlayManager(this)
 
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 48, 48, 48)
-        }
-
-        val titleView = TextView(this).apply {
-            text = "MindLol"
-            textSize = 24f
-            setPadding(0, 0, 0, 8)
-        }
-        layout.addView(titleView)
-
-        val subtitleView = TextView(this).apply {
-            text = "Digital Wellbeing & Short-Video Limit Engine"
-            textSize = 14f
-            setPadding(0, 0, 0, 32)
-        }
-        layout.addView(subtitleView)
-
-        statusTextView = TextView(this).apply {
-            textSize = 14f
-            setPadding(0, 0, 0, 32)
-        }
-        layout.addView(statusTextView)
-
-        val overlayPermissionBtn = Button(this).apply {
-            text = "Grant Overlay Permission"
-            setOnClickListener {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
-                startActivity(intent)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getMindLolStatus" -> {
+                    result.success(getStatusMap())
+                }
+                "getTodayCount" -> {
+                    result.success(repository.getTodayCount())
+                }
+                "getDailyLimit" -> {
+                    result.success(repository.getDailyLimit())
+                }
+                "setDailyLimit" -> {
+                    val limit = call.argument<Int>("limit")
+                    if (limit != null) {
+                        repository.setDailyLimit(limit)
+                        notifyStatusUpdate()
+                        result.success(getStatusMap())
+                    } else {
+                        result.error("INVALID_ARGUMENT", "limit parameter must be an integer", null)
+                    }
+                }
+                "resetTodayCount" -> {
+                    repository.resetTodayCount()
+                    notifyStatusUpdate()
+                    result.success(getStatusMap())
+                }
+                "isLimitReached" -> {
+                    result.success(repository.isLimitReached())
+                }
+                "isAccessibilityEnabled" -> {
+                    result.success(isAccessibilityServiceEnabled())
+                }
+                "isOverlayPermissionGranted" -> {
+                    result.success(overlayManager.hasOverlayPermission())
+                }
+                "getAppConfiguration" -> {
+                    result.success(
+                        mapOf(
+                            "instagramEnabled" to repository.isInstagramEnabled(),
+                            "youtubeEnabled" to repository.isYouTubeEnabled()
+                        )
+                    )
+                }
+                "setAppConfiguration" -> {
+                    val instaEnabled = call.argument<Boolean>("instagramEnabled")
+                    val ytEnabled = call.argument<Boolean>("youtubeEnabled")
+                    if (instaEnabled != null) repository.setInstagramEnabled(instaEnabled)
+                    if (ytEnabled != null) repository.setYouTubeEnabled(ytEnabled)
+                    notifyStatusUpdate()
+                    result.success(getStatusMap())
+                }
+                "getBlockingMode" -> {
+                    result.success(repository.getBlockingMode())
+                }
+                "openAccessibilitySettings" -> {
+                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    startActivity(intent)
+                    result.success(true)
+                }
+                "openOverlaySettings" -> {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    startActivity(intent)
+                    result.success(true)
+                }
+                "getTrackingHealth" -> {
+                    val health = com.mindlol.probe.health.TrackingHealthManager.resolveHealth(
+                        isAccessibilityServiceEnabled = isAccessibilityServiceEnabled(),
+                        isOverlayPermissionGranted = overlayManager.hasOverlayPermission(),
+                        isInstagramEnabled = repository.isInstagramEnabled(),
+                        isYouTubeEnabled = repository.isYouTubeEnabled()
+                    )
+                    result.success(
+                        mapOf(
+                            "state" to health.state.key,
+                            "title" to health.title,
+                            "message" to health.message,
+                            "activePackageName" to (health.activePackageName ?: ""),
+                            "isShortVideoSurface" to health.isShortVideoSurface,
+                            "actionRequired" to (health.actionRequired ?: "")
+                        )
+                    )
+                }
+                else -> {
+                    result.notImplemented()
+                }
             }
         }
-        layout.addView(overlayPermissionBtn)
 
-        val settingsBtn = Button(this).apply {
-            text = "Open Accessibility Settings"
-            setOnClickListener {
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL).setStreamHandler(
+            object : EventChannel.StreamHandler, StatusChangeListener {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    eventSink = events
+                    StatusBroadcaster.addListener(this)
+                    notifyStatusUpdate()
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    StatusBroadcaster.removeListener(this)
+                    eventSink = null
+                }
+
+                override fun onStatusChanged() {
+                    notifyStatusUpdate()
+                }
             }
-        }
-        layout.addView(settingsBtn)
-
-        val setLimitBtn = Button(this).apply {
-            text = "Toggle Daily Limit (5 / 20)"
-            setOnClickListener {
-                val current = repository.getDailyLimit()
-                val next = if (current == 20) 5 else 20
-                repository.setDailyLimit(next)
-                updateStatusText()
-            }
-        }
-        layout.addView(setLimitBtn)
-
-        val resetCountBtn = Button(this).apply {
-            text = "Reset Today's Count"
-            setOnClickListener {
-                repository.resetTodayCount()
-                updateStatusText()
-            }
-        }
-        layout.addView(resetCountBtn)
-
-        val refreshBtn = Button(this).apply {
-            text = "Refresh Status"
-            setOnClickListener {
-                updateStatusText()
-            }
-        }
-        layout.addView(refreshBtn)
-
-        setContentView(layout)
-        updateStatusText()
+        )
     }
 
     override fun onResume() {
         super.onResume()
-        updateStatusText()
+        if (::repository.isInitialized) {
+            notifyStatusUpdate()
+        }
     }
 
-    private fun updateStatusText() {
-        val todayCount = repository.getTodayCount()
-        val dailyLimit = repository.getDailyLimit()
-        val isReached = repository.isLimitReached()
-        val hasOverlayPermission = Settings.canDrawOverlays(this)
+    private fun getStatusMap(): Map<String, Any> {
+        val health = com.mindlol.probe.health.TrackingHealthManager.resolveHealth(
+            isAccessibilityServiceEnabled = isAccessibilityServiceEnabled(),
+            isOverlayPermissionGranted = overlayManager.hasOverlayPermission(),
+            isInstagramEnabled = repository.isInstagramEnabled(),
+            isYouTubeEnabled = repository.isYouTubeEnabled()
+        )
 
-        val debugLogsInfo = if (BuildConfig.DEBUG) {
-            val externalDir = getExternalFilesDir(null) ?: filesDir
-            val counterLogFile = File(externalDir, "counter_events.log")
-            val detectorLogFile = File(externalDir, "detector_events.log")
-            """
-                
-                DEVELOPER DIAGNOSTICS (DEBUG BUILD):
-                Counter Log: ${counterLogFile.absolutePath}
-                Detector Log: ${detectorLogFile.absolutePath}
-            """.trimIndent()
-        } else ""
+        return mapOf(
+            "todayCount" to repository.getTodayCount(),
+            "dailyLimit" to repository.getDailyLimit(),
+            "limitReached" to repository.isLimitReached(),
+            "accessibilityEnabled" to isAccessibilityServiceEnabled(),
+            "overlayPermissionGranted" to overlayManager.hasOverlayPermission(),
+            "instagramEnabled" to repository.isInstagramEnabled(),
+            "youtubeEnabled" to repository.isYouTubeEnabled(),
+            "blockingMode" to repository.getBlockingMode(),
+            "trackingHealthState" to health.state.key,
+            "trackingHealthTitle" to health.title,
+            "trackingHealthMessage" to health.message,
+            "trackingActionRequired" to (health.actionRequired ?: "")
+        )
+    }
 
-        statusTextView.text = """
-            APPLICATION STATUS:
-            Overlay Permission: ${if (hasOverlayPermission) "GRANTED" else "DENIED"}
-            Today's Reel Count: $todayCount / $dailyLimit
-            Limit Status: ${if (isReached) "LIMIT REACHED" else "ACTIVE"}
-            $debugLogsInfo
-        """.trimIndent()
+    private fun notifyStatusUpdate() {
+        eventSink?.success(getStatusMap())
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val expectedService = "$packageName/${DebugProbeService::class.java.canonicalName}"
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+
+        val colonSplitter = TextUtils.SimpleStringSplitter(':')
+        colonSplitter.setString(enabledServices)
+        while (colonSplitter.hasNext()) {
+            val componentName = colonSplitter.next()
+            if (componentName.equals(expectedService, ignoreCase = true)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    companion object {
+        const val METHOD_CHANNEL = "mindlol/platform"
+        const val EVENT_CHANNEL = "mindlol/events"
     }
 }

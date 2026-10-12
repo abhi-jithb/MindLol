@@ -1,0 +1,43 @@
+{
+  "packageName": "com.instagram.android",
+  "className": "android.widget.FrameLayout",
+  "bounds": [0, 0, 1080, 2400],
+  "children": [
+    {
+      "packageName": "com.instagram.android",
+      "viewId": "com.instagram.android:id/clips_viewer_view_pager",
+      "className": "androidx.viewpager2.widget.ViewPager2",
+      "bounds": [0, 0, 1080, 2400],
+      "children": [
+        {
+          "packageName": "com.instagram.android",
+          "className": "androidx.recyclerview.widget.RecyclerView",
+          "bounds": [0, 0, 1080, 2400],
+          "children": [
+            {
+              "packageName": "com.instagram.android",
+              "viewId": "com.instagram.android:id/clips_media_component",
+              "className": "android.view.ViewGroup",
+              "bounds": [0, 0, 1080, 2400],
+              "children": [
+                {
+                  "packageName": "com.instagram.android",
+                  "viewId": "com.instagram.android:id/clips_video_container",
+                  "className": "android.widget.FrameLayout",
+                  "bounds": [0, 0, 1080, 2400],
+                  "children": [
+                    {
+                      "packageName": "com.instagram.android",
+                      "className": "android.view.SurfaceView",
+                      "bounds": [0, 0, 1080, 2400]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "packageName": "com.instagram.android",
+  "className": "android.widget.FrameLayout",
+  "bounds": [0, 0, 1080, 2400],
+  "children": [
+    {
+      "packageName": "com.instagram.android",
+      "viewId": "com.instagram.android:id/feed_recycler_view",
+      "className": "androidx.recyclerview.widget.RecyclerView",
+      "bounds": [0, 110, 1080, 2211],
+      "children": [
+        {
+          "packageName": "com.instagram.android",
+          "viewId": "com.instagram.android:id/row_feed_photo_profile_imageview",
+          "className": "android.widget.ImageView",
+          "bounds": [20, 130, 120, 230]
+        }
+      ]
+    }
+  ]
+}

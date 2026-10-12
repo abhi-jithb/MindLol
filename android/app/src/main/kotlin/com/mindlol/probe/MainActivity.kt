@@ -92,6 +92,24 @@ class MainActivity : FlutterActivity() {
                     startActivity(intent)
                     result.success(true)
                 }
+                "getTrackingHealth" -> {
+                    val health = com.mindlol.probe.health.TrackingHealthManager.resolveHealth(
+                        isAccessibilityServiceEnabled = isAccessibilityServiceEnabled(),
+                        isOverlayPermissionGranted = overlayManager.hasOverlayPermission(),
+                        isInstagramEnabled = repository.isInstagramEnabled(),
+                        isYouTubeEnabled = repository.isYouTubeEnabled()
+                    )
+                    result.success(
+                        mapOf(
+                            "state" to health.state.key,
+                            "title" to health.title,
+                            "message" to health.message,
+                            "activePackageName" to (health.activePackageName ?: ""),
+                            "isShortVideoSurface" to health.isShortVideoSurface,
+                            "actionRequired" to (health.actionRequired ?: "")
+                        )
+                    )
+                }
                 else -> {
                     result.notImplemented()
                 }
@@ -126,6 +144,13 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun getStatusMap(): Map<String, Any> {
+        val health = com.mindlol.probe.health.TrackingHealthManager.resolveHealth(
+            isAccessibilityServiceEnabled = isAccessibilityServiceEnabled(),
+            isOverlayPermissionGranted = overlayManager.hasOverlayPermission(),
+            isInstagramEnabled = repository.isInstagramEnabled(),
+            isYouTubeEnabled = repository.isYouTubeEnabled()
+        )
+
         return mapOf(
             "todayCount" to repository.getTodayCount(),
             "dailyLimit" to repository.getDailyLimit(),
@@ -134,7 +159,11 @@ class MainActivity : FlutterActivity() {
             "overlayPermissionGranted" to overlayManager.hasOverlayPermission(),
             "instagramEnabled" to repository.isInstagramEnabled(),
             "youtubeEnabled" to repository.isYouTubeEnabled(),
-            "blockingMode" to repository.getBlockingMode()
+            "blockingMode" to repository.getBlockingMode(),
+            "trackingHealthState" to health.state.key,
+            "trackingHealthTitle" to health.title,
+            "trackingHealthMessage" to health.message,
+            "trackingActionRequired" to (health.actionRequired ?: "")
         )
     }
 

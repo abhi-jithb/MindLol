@@ -1,0 +1,35 @@
+{
+  "packageName": "com.google.android.youtube",
+  "className": "android.widget.FrameLayout",
+  "bounds": [0, 0, 1080, 2392],
+  "children": [
+    {
+      "packageName": "com.google.android.youtube",
+      "viewId": "com.google.android.youtube:id/reel_watch_fragment_root",
+      "className": "android.widget.FrameLayout",
+      "bounds": [0, 110, 1080, 2211],
+      "children": [
+        {
+          "packageName": "com.google.android.youtube",
+          "viewId": "com.google.android.youtube:id/reel_recycler",
+          "className": "androidx.recyclerview.widget.RecyclerView",
+          "bounds": [0, 110, 1080, 2211]
+        }
+      ]
+    },
+    {
+      "packageName": "com.google.android.youtube",
+      "viewId": "com.google.android.youtube:id/app_engagement_panel",
+      "className": "android.widget.FrameLayout",
+      "bounds": [0, 600, 1080, 2392],
+      "children": [
+        {
+          "packageName": "com.google.android.youtube",
+          "viewId": "com.google.android.youtube:id/engagement_panel_content",
+          "className": "android.view.ViewGroup",
+          "bounds": [0, 600, 1080, 2392]
+        }
+      ]
+    }
+  ]
+}
