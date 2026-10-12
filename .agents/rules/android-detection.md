@@ -12,6 +12,18 @@ tree dump captured from a real device running the current production build
 of the target app. If no such dump exists yet for a given app/version,
 building the debug probe and capturing one is the task — not guessing.
 
+**Status note:** the Instagram Reels probe confirmed a clean, non-obfuscated
+structure (`clips_viewer_view_pager` → `RecyclerView` → ... →
+`clips_video_container` → `SurfaceView`), and forward/backward transition
+counting against it is validated on one real device. **This result does not
+transfer to YouTube Shorts by assumption.** YouTube has been migrating
+surfaces to Jetpack Compose, which can produce a flatter semantics tree
+without conventional resource-ids. Run the same probe process against
+current YouTube Shorts specifically before extending `ReelSurfaceConfig`-
+equivalent rules to it — if the structure is meaningfully different, the
+detector needs a second, structural (bounds/class/scrollable-based)
+strategy, not a copy-pasted resource-id rule that happens not to match.
+
 ## Known failure modes to always guard against
 
 **Resource-id obfuscation.** `findAccessibilityNodeInfosByViewId(...)` can
@@ -48,11 +60,18 @@ target app's actual internal state. Reflect this honestly:
 - In-app copy should not claim exact per-video accuracy beyond what's
   actually verifiable.
 
-## Remote-config requirement
+## Remote-config requirement — do this now, not later
 Per-app detection rules (resource-ids, class-name hints, structural
 thresholds) must be loaded from Firebase Remote Config, not hardcoded.
 Target apps' UI changes will break matching rules periodically; fixes must
 be deployable without an app-store review cycle.
+
+Current rules (e.g. `clips_viewer_view_pager`) are still hardcoded as of
+this writing. **Wire Remote Config alongside the YouTube validation work,
+not after Settings/onboarding.** The YouTube probe is likely to surface
+exactly the kind of rule fragility this exists to solve — better to have
+the hot-patch path ready when that happens than to discover the need for
+it reactively after a break ships to users.
 
 ## Blocking behavior — compliance-critical
 All blocking must be a user-facing overlay that requires a direct user
@@ -68,9 +87,12 @@ not shipped.
 ## Overlay testing — do not mark this task done without
 - Tested against gesture navigation AND 3-button navigation
 - Tested with TalkBack simultaneously enabled — the overlay must not break
-  TalkBack's own navigation for users who depend on it
+  TalkBack's own navigation for users who depend on it. **Not yet done as
+  of this writing — required before any public testing track, not
+  optional hardening.**
 - Tested on at least two real OEM devices (e.g. Samsung + Pixel or Xiaomi),
-  not emulator-only
+  not emulator-only. **Only one device validated so far — do not treat
+  current overlay/blocker results as representative until this happens.**
 - Verified the overlay's actual focusability/touch behavior matches intent
   — don't trust a flag expression without confirming its runtime effect on
   a real device; a self-canceling bitwise expression (e.g. `X.inv() and X`)

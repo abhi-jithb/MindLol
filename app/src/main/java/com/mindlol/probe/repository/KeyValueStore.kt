@@ -10,6 +10,8 @@ interface KeyValueStore {
     fun putInt(key: String, value: Int)
     fun getString(key: String, defaultValue: String?): String?
     fun putString(key: String, value: String?)
+    fun getBoolean(key: String, defaultValue: Boolean): Boolean
+    fun putBoolean(key: String, value: Boolean)
 }
 
 /**
@@ -33,6 +35,14 @@ class SharedPreferencesStore(context: Context) : KeyValueStore {
     override fun putString(key: String, value: String?) {
         prefs.edit().putString(key, value).apply()
     }
+
+    override fun getBoolean(key: String, defaultValue: Boolean): Boolean {
+        return prefs.getBoolean(key, defaultValue)
+    }
+
+    override fun putBoolean(key: String, value: Boolean) {
+        prefs.edit().putBoolean(key, value).apply()
+    }
 }
 
 /**
@@ -54,6 +64,14 @@ class InMemoryKeyValueStore : KeyValueStore {
     }
 
     override fun putString(key: String, value: String?) {
+        map[key] = value
+    }
+
+    override fun getBoolean(key: String, defaultValue: Boolean): Boolean {
+        return (map[key] as? Boolean) ?: defaultValue
+    }
+
+    override fun putBoolean(key: String, value: Boolean) {
         map[key] = value
     }
 }

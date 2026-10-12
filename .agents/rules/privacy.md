@@ -2,7 +2,7 @@
 trigger: always_on
 ---
 
-# Privacy rules
+# Privacy rules — MindLol
 
 ## Core commitment
 Content-detection logic runs entirely on-device. The app never inspects,

@@ -58,6 +58,11 @@ trigger: always_on
   no shaming copy, especially around cap-hit and Shattered-mascot states.
 
 ## Testing expectations
+- "Tests passed" is never sufficient on its own as a status update — always
+  state which scenarios are actually covered. A test count (e.g. "27 tests
+  passed") tells you nothing about whether the scenarios that matter
+  (rewatch, fast-fling/overscroll bounce, detector-disappears-temporarily,
+  cross-app switching) are among them. Name the scenarios, not the count.
 - Detection/counting logic: unit tests covering forward-swipe, rewatch/
   back-swipe, and fast-fling/overscroll-bounce scenarios specifically, not
   just a single happy-path case.

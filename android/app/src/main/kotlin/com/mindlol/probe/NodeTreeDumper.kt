@@ -39,7 +39,7 @@ object NodeTreeDumper {
             append("EVENT_INDEXES: fromIndex=$fromIndex, toIndex=$toIndex\n")
             append("EVENT_SCROLL: scrollX=$scrollX, scrollY=$scrollY\n")
             detectionResult?.let {
-                append("DETECTION_RESULT: isReel=${it.isReel}, confidence=${it.confidence}, author=${it.authorName}, activeBounds=${it.activeReelBounds}, evidence=${it.evidence}\n")
+                append("DETECTION_RESULT: isReel=${it.isReel}, confidence=${it.confidence}, hasAuthor=${it.authorName != null}, activeBounds=${it.activeReelBounds}, evidence=${it.evidence}\n")
             }
             append("------------------------------------------------------------------------\n")
         }.toString()
@@ -83,22 +83,22 @@ object NodeTreeDumper {
         }
 
         val className = node.className?.toString() ?: "null"
-        val textStr = sanitizeString(node.text?.toString())
-        val contentDescStr = sanitizeString(node.contentDescription?.toString())
+        val tokensStr = classifyAllowlistedTokens(node.text, node.contentDescription)
         val isVisible = node.isVisibleToUser
+        val isClickable = node.isClickable
         val isScrollable = node.isScrollable
         val childCount = node.childCount
 
         val nodeLine = String.format(
             Locale.US,
-            "%s[%s] id=%s | text=\"%s\" | desc=\"%s\" | bounds=%s | visible=%b | scrollable=%b | children=%d\n",
+            "%s[%s] id=%s | tokens=%s | bounds=%s | visible=%b | clickable=%b | scrollable=%b | children=%d\n",
             indent,
             className,
             resIdStr,
-            textStr,
-            contentDescStr,
+            tokensStr,
             bounds.toShortString(),
             isVisible,
+            isClickable,
             isScrollable,
             childCount
         )
@@ -115,8 +115,35 @@ object NodeTreeDumper {
         }
     }
 
-    private fun sanitizeString(input: String?): String {
-        if (input == null) return "null"
-        return input.replace("\n", "\\n").replace("\r", "\\r").take(100)
+    private fun classifyAllowlistedTokens(text: CharSequence?, desc: CharSequence?): String {
+        val tokens = mutableListOf<String>()
+        checkToken(text, tokens)
+        checkToken(desc, tokens)
+        return when {
+            tokens.isNotEmpty() -> tokens.distinct().joinToString(",")
+            text == null && desc == null -> "NONE"
+            else -> "REDACTED"
+        }
+    }
+
+    private fun checkToken(input: CharSequence?, tokens: MutableList<String>) {
+        if (input == null) return
+        val str = input.toString().lowercase(Locale.US)
+        when {
+            str.contains("shorts") -> tokens.add("SHORTS_LABEL_PRESENT")
+            str.contains("reel") -> tokens.add("REEL_LABEL_PRESENT")
+            str.contains("subscriptions") -> tokens.add("SUBSCRIPTIONS_TAB")
+            str.contains("home") -> tokens.add("HOME_TAB")
+            str.contains("you") -> tokens.add("YOU_TAB")
+            str.contains("search") -> tokens.add("SEARCH_LABEL")
+            str.contains("comments") -> tokens.add("COMMENTS_LABEL")
+            str.contains("subscribe") -> tokens.add("SUBSCRIBE_ACTION")
+            str.contains("remix") -> tokens.add("REMIX_ACTION")
+            str.contains("share") -> tokens.add("SHARE_ACTION")
+            str.contains("like") -> tokens.add("LIKE_ACTION")
+            str.contains("dislike") -> tokens.add("DISLIKE_ACTION")
+            str.contains("sound") || str.contains("audio") -> tokens.add("AUDIO_LABEL")
+            str.contains("pause") || str.contains("play") -> tokens.add("PLAYBACK_CONTROL")
+        }
     }
 }

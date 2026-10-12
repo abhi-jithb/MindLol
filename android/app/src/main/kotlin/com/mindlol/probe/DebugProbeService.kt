@@ -6,8 +6,11 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.mindlol.probe.counter.InstagramReelCounter
 import com.mindlol.probe.counter.ReelObservation
+import com.mindlol.probe.counter.ShortsObservation
+import com.mindlol.probe.counter.YouTubeShortsCounter
 import com.mindlol.probe.detector.DetectionResult
 import com.mindlol.probe.detector.InstagramReelDetector
+import com.mindlol.probe.detector.YouTubeShortsDetector
 import com.mindlol.probe.overlay.BlockOverlayManager
 import com.mindlol.probe.repository.ReelCounterRepository
 import com.mindlol.probe.repository.ReelCounterRepositoryImpl
@@ -22,6 +25,7 @@ class DebugProbeService : AccessibilityService() {
     private var lastEventTimeMs = 0L
 
     private val reelCounter = InstagramReelCounter()
+    private val shortsCounter = YouTubeShortsCounter()
     private lateinit var repository: ReelCounterRepository
     private lateinit var overlayManager: BlockOverlayManager
     private lateinit var floatingHudManager: com.mindlol.probe.overlay.FloatingCountHudManager
@@ -155,6 +159,67 @@ class DebugProbeService : AccessibilityService() {
                 DetectorEventLogger.logDetectorEvent(event, detected, detectorLogFile)
                 DetectorEventLogger.logCounterEvent(event, counterResult, detected.isReel, counterLogFile)
                 Log.d(TAG, "[Pipeline 11] Recorded detection and counter events to debug log files.")
+            }
+        } else if (rawEventPkg == YOUTUBE_PKG) {
+            val detected = com.mindlol.probe.detector.YouTubeShortsDetector.detect(rootNode)
+            detectionResult = detected
+
+            Log.d(
+                TAG,
+                "[YouTube Pipeline 5-7] isShorts=${detected.isReel} | evidence=${detected.evidence} | bounds=${detected.activeReelBounds?.toShortString()}"
+            )
+
+            if (::floatingHudManager.isInitialized && ::repository.isInitialized) {
+                floatingHudManager.updateHudVisibility(
+                    activePackageName = activePkg,
+                    isShortVideoSurface = detected.isReel,
+                    isLimitReached = repository.isLimitReached(),
+                    isTestUnlocked = overlayManager.isTestUnlocked
+                )
+            }
+
+            val isCommentsOpen = YouTubeShortsDetector.isCommentsOpen(rootNode)
+            val obs = ShortsObservation(
+                isShorts = detected.isReel,
+                eventType = eventTypeStr,
+                eventClass = eventClassStr,
+                scrollX = event.scrollX,
+                scrollY = event.scrollY,
+                isCommentsOpen = isCommentsOpen,
+                timestampMs = System.currentTimeMillis()
+            )
+
+            val counterResult = shortsCounter.processObservation(obs)
+
+            if (counterResult.isCounted && ::repository.isInitialized) {
+                repository.incrementCount()
+                // Re-evaluate overlay and HUD state immediately upon new increment
+                if (::overlayManager.isInitialized) {
+                    overlayManager.updateOverlayState(activePkg, repository.isLimitReached())
+                }
+                if (::floatingHudManager.isInitialized) {
+                    floatingHudManager.updateHudVisibility(
+                        activePackageName = activePkg,
+                        isShortVideoSurface = detected.isReel,
+                        isLimitReached = repository.isLimitReached(),
+                        isTestUnlocked = overlayManager.isTestUnlocked
+                    )
+                }
+            }
+
+            val todayCount = if (::repository.isInitialized) repository.getTodayCount() else 0
+            val dailyLimit = if (::repository.isInitialized) repository.getDailyLimit() else 0
+            val limitReached = if (::repository.isInitialized) repository.isLimitReached() else false
+
+            Log.d(
+                TAG,
+                "[YouTube Pipeline 8-10] Obs(isShorts=${obs.isShorts}, scrollY=${obs.scrollY}) -> CounterResult(isCounted=${counterResult.isCounted}, sessionCount=${counterResult.sessionCount}, todayCount=$todayCount/$dailyLimit, limitReached=$limitReached, dir=${counterResult.direction}, evidence=${counterResult.evidence})"
+            )
+
+            if (BuildConfig.DEBUG) {
+                DetectorEventLogger.logDetectorEvent(event, detected, detectorLogFile)
+                DetectorEventLogger.logCounterEvent(event, counterResult, detected.isReel, counterLogFile)
+                Log.d(TAG, "[YouTube Pipeline 11] Recorded detection and counter events to debug log files.")
             }
         }
 

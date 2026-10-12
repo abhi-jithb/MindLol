@@ -159,3 +159,97 @@ Minimal Flutter settings screen adhering to MindLol design system (sentence-case
 - **Android Native JVM Tests**: All 51 unit test tasks passing (`ReelCounterRepositoryTest.kt`, `InstagramReelCounterTest.kt`, `InstagramReelDetectorTest.kt`, `StatusBroadcasterTest.kt`).
 - **Physical Device Validation**: Validated on physical device (`10AFCB07PR003X0`). Settings screen navigation, limit modification, app toggles disabling/enabling, HUD auto-hide when app is disabled, Blob stage state recalculation, and reboot/restart persistence verified.
 
+---
+
+## 8. YouTube Shorts Accessibility Probe Findings (Phase 13 Probe)
+
+### Device & App Ground Truth
+- **OEM Device**: Vivo V2529 (`10AFCB07PR003X0`), Android 16.
+- **YouTube Version**: `21.40.161` (`com.google.android.youtube`).
+
+### Observed Structural Architecture
+- **Surface Identifier**:
+  - `com.google.android.youtube:id/reel_watch_fragment_root` (`FrameLayout` at bounds `[0, 110][1080, 2211]`) is uniquely and consistently present **only** on YouTube Shorts.
+  - Absent on Home Feed (`browse_fragment_layout_coordinator_layout`), regular video watch page (`watch_while_layout_coordinator_layout`), and search results.
+- **Feed Container**:
+  - `com.google.android.youtube:id/reel_recycler` (`RecyclerView` at bounds `[0, 110][1080, 2211]`).
+  - Contains child pages: `com.google.android.youtube:id/reel_player_page_container`.
+- **Active Video Surface**:
+  - `com.google.android.youtube:id/reel_player_underlay` and `com.google.android.youtube:id/reel_watch_player` enclosing `android.view.SurfaceView`.
+- **Shorts Overlay & Action Controls**:
+  - `com.google.android.youtube:id/reel_player_overlay_container`.
+  - Right-side UFI actions: `LIKE_ACTION` (`RadioButton`), `COMMENTS_LABEL` (`Button`), `SHARE_ACTION` (`Button`), `REMIX_ACTION` (`Button`), `AUDIO_LABEL` (`Button`).
+  - Gradient scrims: `reel_scrim_shorts_while_bottom_gradient`, `reel_scrim_shorts_while_top`, and `reel_progress_bar`.
+- **Engagement Panels / Comments**:
+  - Tapping comments opens `com.google.android.youtube:id/app_engagement_panel` bottom sheet in lower half of screen while `reel_watch_fragment_root` remains active beneath.
+
+### Transition Semantics & Counting Feasibility
+- **Index Obfuscation**: Unlike Instagram (`fromIndex` / `toIndex` integers), YouTube Shorts reports `fromIndex = -1, toIndex = -1` on all `TYPE_VIEW_SCROLLED` events. Instagram's index-delta strategy does **not** transfer.
+- **Directional Scroll Deltas**:
+  - Forward swipe (swiping up to view next Short) produces positive vertical scroll values on `TYPE_VIEW_SCROLLED` (`scrollY > 0`, observed: `775`, `1316`, `533`, `1075`).
+  - Backward swipe (swiping down to rewatch previous Short) produces negative vertical scroll values (`scrollY < 0`, observed: `-679`, `-1223`).
+  - Fling settling bounce produces minor opposite-sign adjustments (`scrollY = -143` after `+1075`, or `+25` after `-1223`).
+- **Child Page Settling**:
+  - During scroll transitions, `reel_recycler` transiently contains 2 `reel_player_page_container` children (one exiting, one entering).
+  - Once settled, `reel_recycler` collapses to 1 active child filling `[0, 110][1080, 2211]`.
+
+---
+
+## Phase 14 — YouTube Shorts Detection & Counting Implementation
+
+### Implementation Architecture
+MindLol implements dedicated, decoupled YouTube Shorts detection and counting without altering established Instagram Reel detection pipelines:
+
+1. **Surface Detector (`YouTubeShortsDetector.kt`)**:
+   - Primary rule: Checks for presence of `com.google.android.youtube:id/reel_watch_fragment_root` + (`reel_recycler` or `reel_player_page_container`).
+   - Structural fallback: Bounds and hierarchy checks for right-aligned vertical action column (`x in [850, 1080]`) if resource IDs are stripped in future release builds.
+   - Rejection: Non-YouTube packages, Home feed (`pane_fragment_container` / `results`), standard video player (`watch_while_layout`), and search results are rejected (`isReel = false`).
+   - Engagement panels: Comments bottom-sheet retains `isReel = true` because root Shorts container remains active.
+
+2. **Direction-Aware Counter (`YouTubeShortsCounter.kt`)**:
+   - Initial landing: Baseline initialization only (`count = 0`, direction `INITIAL`).
+   - Forward transition: Accumulated vertical displacement (`accumulatedScrollY >= 400px`) emits forward transition (`count + 1`, direction `FORWARD`).
+   - Rewatch / backward swipe: Accumulated negative vertical displacement (`accumulatedScrollY <= -400px`) resets displacement without incrementing (`count + 0`, direction `BACKWARD`).
+   - Fling settling bounce suppression: Minor opposing-sign adjustments of small magnitude (`|scrollY| < |accumulatedScrollY| / 2`) during gesture settling are suppressed to avoid false cancellations.
+   - Debounce window: 400ms cooldown after a confirmed increment suppresses duplicate accessibility events during fling deceleration.
+   - Surface exit: Navigating away from Shorts resets pending accumulation. If away for > 1500ms, baseline is reset for clean re-entry.
+
+3. **Pipeline Integration (`DebugProbeService.kt`)**:
+   - Accessibility events from `com.google.android.youtube` route to `YouTubeShortsDetector`.
+   - `ShortsObservation` is evaluated by `shortsCounter`.
+   - On confirmed transition (`isCounted == true`), authoritative `ReelCounterRepository.incrementCount()` is called.
+   - Status broadcaster synchronizes HUD, Blocker, and Flutter dashboard.
+   - Single authoritative aggregate count and single daily limit are shared across Instagram and YouTube.
+
+### Tested Device & Application Version
+- **Device**: Vivo V2529 (Physical device ID: `10AFCB07PR003X0`)
+- **OS**: Android 16 (API 36)
+- **Target App**: YouTube version `21.40.161`
+- **MindLol Build**: Debug variant (`com.mindlol.probe.debug`)
+
+### Provisional Constants
+- `MIN_FORWARD_SCROLL_PX = 400`: Directional displacement threshold. (Provisional: verified against captured scroll deltas between 503px and 1316px).
+- `DEBOUNCE_WINDOW_MS = 400L`: Minimum interval between consecutive counts. (Provisional: verified against settling deceleration window).
+- `SURFACE_EXIT_TIMEOUT_MS = 1500L`: Surface absence threshold before baseline re-initialization.
+
+### Validated Scenarios
+- ✅ Verified structural Shorts detection via `reel_watch_fragment_root` + `reel_recycler`.
+- ✅ Normal YouTube surfaces (Home feed, search, standard video player) correctly classified as `NO_SHORTS_SURFACE`.
+- ✅ Initial Shorts entry establishes baseline without incrementing (`count = 0`).
+- ✅ Confirmed forward transition increments authoritative repository count.
+- ✅ Settling bounce and duplicate event suppression via debounce window.
+- ✅ Backward rewatch swipe does not increment count.
+- ✅ Leaving Shorts surface hides Floating HUD.
+- ✅ Daily limit reached triggers blocking overlay on YouTube Shorts.
+- ✅ Blocker test unlock dismisses overlay and restores HUD in test mode.
+- ✅ Instagram Reels detection and counting remain 100% independent and unaffected.
+
+### Unvalidated Scenarios & Known Limitations
+- ⚠️ **Directional Heuristic Sensitivity**: Unlike Instagram's deterministic `fromIndex`/`toIndex` integer transition, YouTube relies on scroll displacement deltas. Rapid flick reversals or irregular multi-touch gestures can occasionally produce negative fling values during forward intent.
+- ⚠️ **Multi-OEM Consistency**: Validated only on Vivo V2529 (Android 16). Behavior on Samsung OneUI and Google Pixel devices remains unverified.
+- ⚠️ **TalkBack Concurrency**: TalkBack interaction while running YouTube detector has not been fully verified.
+- ⚠️ **Remote Config Gate**: Per-app detection rules are currently hardcoded; remote configuration (Phase 15) must be wired before public store release.
+- ⚠️ **Confidence Framing**: Per-video counts on YouTube Shorts represent a high-confidence estimate rather than ground truth.
+
+
+
