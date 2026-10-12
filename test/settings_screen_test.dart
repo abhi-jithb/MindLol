@@ -90,12 +90,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('USAGE'), findsOneWidget);
-    expect(find.text('SUPPORTED APPS'), findsOneWidget);
+    expect(find.text('Usage'), findsOneWidget);
+    expect(find.text('Supported apps'), findsOneWidget);
     expect(find.text('20 Reels'), findsOneWidget);
     expect(find.text('Instagram Reels'), findsOneWidget);
     expect(find.text('YouTube Shorts'), findsOneWidget);
     expect(find.text('Blocking Mode'), findsOneWidget);
+
+    // Scroll to check About section elements
+    await tester.scrollUntilVisible(
+      find.text('Privacy Disclosure'),
+      200.0,
+      scrollable: find.byType(Scrollable),
+    );
     expect(find.text('Privacy Disclosure'), findsOneWidget);
   });
 
@@ -156,7 +163,7 @@ void main() {
 
     // Verify Settings screen visible
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('USAGE'), findsOneWidget);
+    expect(find.text('Usage'), findsOneWidget);
 
     // Tap back button
     final backButton = find.byType(BackButton);

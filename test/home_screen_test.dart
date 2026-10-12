@@ -112,11 +112,37 @@ void main() {
 
     expect(find.text('30'), findsOneWidget);
     expect(find.text('100% of limit'), findsOneWidget);
-    expect(find.text('okay, let\'s breathe.'), findsOneWidget);
+    // At 100% of limit, Blob is Cracked (75%-150% per project.md), copy is 'uh oh.'
+    expect(find.text('uh oh.'), findsOneWidget);
     expect(
       find.text('Your daily limit is reached. MindLol blocker is active.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('Shows Shattered state when usage significantly exceeds limit (150%+)',
+      (WidgetTester tester) async {
+    mockResponse = {
+      'todayCount': 48,
+      'dailyLimit': 30,
+      'limitReached': true,
+      'accessibilityEnabled': true,
+      'overlayPermissionGranted': true,
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: HomeScreen(platform: platform),
+      ),
+    );
+
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('48'), findsOneWidget);
+    expect(find.text('160% of limit'), findsOneWidget);
+    // At 160% of limit, Blob is Shattered (150%+ per project.md), copy is 'okay, let\'s breathe.'
+    expect(find.text('okay, let\'s breathe.'), findsOneWidget);
   });
 
   testWidgets('LimitEditModal selects preset and invokes onSave callback',
@@ -140,15 +166,15 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify modal elements present
-    expect(find.text('Set Daily Reel Limit'), findsOneWidget);
-    expect(find.text('15 Reels'), findsOneWidget);
+    expect(find.text('Set daily limit'), findsOneWidget);
+    expect(find.text('15 videos'), findsOneWidget);
 
     // Select preset 15
-    await tester.tap(find.widgetWithText(ChoiceChip, '15 Reels'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '15 videos'));
     await tester.pump();
 
     // Save
-    await tester.tap(find.widgetWithText(ElevatedButton, 'Save Limit'));
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Save limit'));
     await tester.pump();
 
     // Verify onSave was called with 15

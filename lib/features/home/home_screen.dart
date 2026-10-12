@@ -10,6 +10,8 @@ import 'widgets/permission_banner.dart';
 import 'widgets/progress_card.dart';
 import '../settings/settings_screen.dart';
 
+/// MindLol home screen featuring the living Blob mascot,
+/// real-time video counter, daily limit controls, and tracking status.
 class HomeScreen extends StatefulWidget {
   final MindLolPlatform platform;
 
@@ -96,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         setState(() => _status = updated);
       }
     } catch (e) {
-      // Soft failure handling
+      // Non-fatal error handling
     }
   }
 
@@ -142,8 +144,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: const Text(
           'MindLol',
           style: TextStyle(
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
           ),
         ),
         centerTitle: true,
@@ -215,6 +217,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final blobState = BlobState.fromCountAndLimit(todayCount, dailyLimit);
     final limitReached = _status?.limitReached ?? (todayCount >= dailyLimit);
 
+    final disableAnimations = MediaQuery.maybeDisableAnimationsOf(context) ??
+        MediaQuery.of(context).disableAnimations;
+
     return RefreshIndicator(
       onRefresh: _fetchStatus,
       color: AppColors.primaryTeal,
@@ -224,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Setup/Permission Status Banner
+            // 1. Setup / Permission Status Banner
             PermissionBanner(
               accessibilityEnabled: _status?.accessibilityEnabled ?? true,
               overlayPermissionGranted:
@@ -236,18 +241,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
             const SizedBox(height: 12),
 
-            // Blob Mascot Centerpiece
-            BlobWidget(blobState: blobState),
+            // 2. Blob Mascot Centerpiece with living personality
+            BlobWidget(
+              blobState: blobState,
+              todayCount: todayCount,
+              dailyLimit: dailyLimit,
+            ),
 
             const SizedBox(height: 16),
 
-            // Blob Stage Title & Message
+            // 3. Blob Stage Title & Message
             Text(
               blobState.title,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
                 color: blobState.color,
               ),
             ),
@@ -257,27 +267,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
+                height: 1.35,
                 color: secondaryTextColor,
               ),
             ),
 
             const SizedBox(height: 28),
 
-            // Primary Metric: Today's Reel Count
-            Text(
-              '$todayCount',
-              style: TextStyle(
-                fontSize: 64,
-                fontWeight: FontWeight.w800,
-                height: 1.0,
-                color: primaryTextColor,
-              ),
-            ),
+            // 4. Primary Metric: Today's Video Count with smooth transition
+            disableAnimations
+                ? Text(
+                    '$todayCount',
+                    style: TextStyle(
+                      fontSize: 64,
+                      fontWeight: FontWeight.w700,
+                      height: 1.0,
+                      letterSpacing: -1.0,
+                      color: primaryTextColor,
+                    ),
+                  )
+                : AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0.0, 0.15),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: Text(
+                      '$todayCount',
+                      key: ValueKey<int>(todayCount),
+                      style: TextStyle(
+                        fontSize: 64,
+                        fontWeight: FontWeight.w700,
+                        height: 1.0,
+                        letterSpacing: -1.0,
+                        color: primaryTextColor,
+                      ),
+                    ),
+                  ),
             const SizedBox(height: 4),
             Text(
               todayCount == 1 ? 'Reel today' : 'Reels today',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
                 color: secondaryTextColor,
               ),
@@ -285,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
             const SizedBox(height: 24),
 
-            // Limit Reached State Banner
+            // 5. Limit Reached State Banner (Supportive, non-shaming)
             if (limitReached)
               Container(
                 margin: const EdgeInsets.only(bottom: 20),
@@ -295,9 +334,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.coral.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: AppColors.coral.withValues(alpha: 0.5),
+                    color: AppColors.coral.withValues(alpha: 0.4),
+                    width: 1,
                   ),
                 ),
                 child: Row(
@@ -314,6 +354,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
+                          height: 1.35,
                           color: primaryTextColor,
                         ),
                       ),
@@ -322,7 +363,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
 
-            // Progress Visualization Card
+            // 6. Progress Visualization Card
             ProgressCard(
               todayCount: todayCount,
               dailyLimit: dailyLimit,
@@ -331,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
             const SizedBox(height: 20),
 
-            // Daily Limit Control
+            // 7. Daily Limit Control Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -351,6 +392,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
                         color: primaryTextColor,
                       ),
                     ),
@@ -377,4 +419,3 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 }
-

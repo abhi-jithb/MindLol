@@ -3,8 +3,9 @@ import 'blob_state.dart';
 /// Centralized microcopy dictionary for Blob personality states.
 ///
 /// Tone guidelines:
-/// - Human, playful, supportive, slightly weird.
+/// - Human, playful, supportive, slightly self-aware.
 /// - NEVER shame, scold, or sound like a corporate productivity coach.
+/// - Uses sentence-case phrasing.
 class BlobCopy {
   final String title;
   final String message;
@@ -15,7 +16,7 @@ class BlobCopy {
     if (count <= 0) {
       return const BlobCopy(
         title: 'we\'re chilling.',
-        message: 'No Reels today. Mind is clear and calm.',
+        message: 'No videos watched yet. Mind is clear and calm.',
       );
     }
 

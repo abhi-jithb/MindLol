@@ -4,6 +4,8 @@ import '../../core/platform/mindlol_platform.dart';
 import '../../core/platform/mindlol_status.dart';
 import '../home/widgets/limit_edit_modal.dart';
 
+/// Settings screen for configuring daily limits, supported short-form video apps,
+/// tracking health diagnostics, and on-device privacy disclosures.
 class SettingsScreen extends StatefulWidget {
   final MindLolPlatform platform;
   final MindLolStatus currentStatus;
@@ -60,10 +62,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Privacy & Security'),
+        title: const Text(
+          'Privacy & security',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
         content: const Text(
           'MindLol is privacy-first by design. All detection and counting run locally on your device.\n\n'
-          'MindLol NEVER inspects, stores, or transmits video content, URLs, creator usernames, captions, or screenshots.',
+          'MindLol never inspects, stores, or transmits video content, URLs, creator usernames, captions, or screenshots.',
+          style: TextStyle(height: 1.4),
         ),
         actions: [
           TextButton(
@@ -87,7 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         title: const Text(
           'Settings',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: -0.2),
         ),
         centerTitle: true,
         elevation: 0,
@@ -96,7 +102,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           children: [
-            _buildSectionHeader('USAGE', secondaryTextColor),
+            // 1. Usage Section
+            _buildSectionHeader('Usage', secondaryTextColor),
             const SizedBox(height: 8),
             Card(
               child: ListTile(
@@ -116,8 +123,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
-            const SizedBox(height: 24),
-            _buildSectionHeader('SUPPORTED APPS', secondaryTextColor),
+            const SizedBox(height: 20),
+
+            // 2. Supported Apps Section
+            _buildSectionHeader('Supported apps', secondaryTextColor),
             const SizedBox(height: 8),
             Card(
               child: Column(
@@ -159,31 +168,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
-            const SizedBox(height: 24),
-            _buildSectionHeader('BLOCKING', secondaryTextColor),
+            const SizedBox(height: 20),
+
+            // 3. Blocking Section
+            _buildSectionHeader('Blocking', secondaryTextColor),
             const SizedBox(height: 8),
             Card(
-              child: ListTile(
-                title: Text(
-                  'Blocking Mode',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: primaryTextColor,
+              child: Column(
+                children: [
+                  ListTile(
+                    title: Text(
+                      'Blocking Mode',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryTextColor,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Block at daily limit',
+                      style: TextStyle(color: secondaryTextColor),
+                    ),
+                    trailing: const Icon(
+                      Icons.check_circle_outline_rounded,
+                      color: AppColors.primaryTeal,
+                    ),
                   ),
-                ),
-                subtitle: Text(
-                  'Block at daily limit',
-                  style: TextStyle(color: secondaryTextColor),
-                ),
-                trailing: const Icon(
-                  Icons.check_circle_outline_rounded,
-                  color: AppColors.primaryTeal,
-                ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(
+                      _status.trackingHealthState == TrackingHealthState.tracking
+                          ? Icons.radar_rounded
+                          : Icons.shield_outlined,
+                      color: AppColors.primaryTeal,
+                    ),
+                    title: Text(
+                      _status.trackingHealthTitle,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryTextColor,
+                      ),
+                    ),
+                    subtitle: Text(
+                      _status.trackingHealthMessage,
+                      style: TextStyle(
+                        color: secondaryTextColor,
+                        fontSize: 13,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
-            const SizedBox(height: 24),
-            _buildSectionHeader('ABOUT', secondaryTextColor),
+            const SizedBox(height: 20),
+
+            // 4. About & Privacy Section
+            _buildSectionHeader('About', secondaryTextColor),
             const SizedBox(height: 8),
             Card(
               child: Column(
@@ -222,6 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -234,9 +276,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Text(
         title,
         style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.0,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
           color: textColor,
         ),
       ),

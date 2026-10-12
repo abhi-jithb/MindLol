@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 
+/// Bottom sheet modal for adjusting daily short-form video limit.
+///
+/// Features:
+/// - Quick preset chips (10, 15, 20, 30, 50, 100)
+/// - Custom limit input with validation
+/// - Minimum 48dp touch targets
+/// - Clean sentence-case copy
 class LimitEditModal extends StatefulWidget {
   final int currentLimit;
   final Function(int newLimit) onSave;
@@ -80,10 +87,14 @@ class _LimitEditModalState extends State<LimitEditModal> {
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         decoration: BoxDecoration(
           color: surfaceColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            width: 1,
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -99,26 +110,28 @@ class _LimitEditModalState extends State<LimitEditModal> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             Text(
-              'Set Daily Reel Limit',
+              'Set daily limit',
               style: TextStyle(
                 fontSize: 20,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
                 color: textColor,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               'MindLol will overlay a gentle blocker once you hit this limit.',
               style: TextStyle(
                 fontSize: 14,
+                height: 1.35,
                 color: secondaryTextColor,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 22),
             Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -127,9 +140,12 @@ class _LimitEditModalState extends State<LimitEditModal> {
                 ..._quickPresets.map((preset) {
                   final isSelected = !_isCustom && _selectedLimit == preset;
                   return ChoiceChip(
-                    label: Text('$preset Reels'),
+                    label: Text('$preset videos'),
                     selected: isSelected,
                     selectedColor: AppColors.primaryTeal,
+                    backgroundColor: isDark
+                        ? AppColors.darkSurfaceContainer
+                        : AppColors.lightSurfaceContainer,
                     labelStyle: TextStyle(
                       color: isSelected
                           ? Colors.white
@@ -156,22 +172,22 @@ class _LimitEditModalState extends State<LimitEditModal> {
               children: [
                 Text(
                   'Selected limit: ',
-                  style: TextStyle(color: secondaryTextColor, fontSize: 15),
+                  style: TextStyle(color: secondaryTextColor, fontSize: 14),
                 ),
                 Text(
-                  '${_isCustom ? (_customController.text.isEmpty ? '?' : _customController.text) : _selectedLimit} Reels',
-                  style: TextStyle(
+                  '${_isCustom ? (_customController.text.isEmpty ? '?' : _customController.text) : _selectedLimit} videos',
+                  style: const TextStyle(
                     color: AppColors.primaryTeal,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 22),
             ElevatedButton(
               onPressed: _save,
-              child: const Text('Save Limit'),
+              child: const Text('Save limit'),
             ),
             const SizedBox(height: 8),
           ],

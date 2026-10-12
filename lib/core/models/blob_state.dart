@@ -4,11 +4,20 @@ import 'blob_copy.dart';
 
 enum BlobStage { calm, wobbly, cracked, shattered }
 
+/// Immutable state descriptor for the Blob mascot and usage progress.
+///
+/// Thresholds follow `.agents/rules/project.md`:
+/// - 0–25% of limit → Calm
+/// - 25–75% of limit → Wobbly
+/// - 75–150% of limit → Cracked (strain/cap reached)
+/// - 150%+ of limit → Shattered (overwhelmed)
 class BlobState {
   final BlobStage stage;
   final String title;
   final String message;
   final double ratio;
+  final double progressRatio;
+  final int percentage;
   final Color color;
 
   const BlobState({
@@ -16,12 +25,14 @@ class BlobState {
     required this.title,
     required this.message,
     required this.ratio,
+    required this.progressRatio,
+    required this.percentage,
     required this.color,
   });
 
   factory BlobState.fromCountAndLimit(int count, int limit) {
     final validLimit = limit <= 0 ? 20 : limit;
-    final ratio = count / validLimit;
+    final rawRatio = count / validLimit;
 
     BlobStage stage;
     Color color;
@@ -29,13 +40,13 @@ class BlobState {
     if (count <= 0) {
       stage = BlobStage.calm;
       color = AppColors.stageCalm;
-    } else if (ratio < 0.25) {
+    } else if (rawRatio < 0.25) {
       stage = BlobStage.calm;
       color = AppColors.stageCalm;
-    } else if (ratio < 0.75) {
+    } else if (rawRatio < 0.75) {
       stage = BlobStage.wobbly;
       color = AppColors.stageWobbly;
-    } else if (ratio < 1.0) {
+    } else if (rawRatio < 1.50) {
       stage = BlobStage.cracked;
       color = AppColors.stageCracked;
     } else {
@@ -49,7 +60,9 @@ class BlobState {
       stage: stage,
       title: copy.title,
       message: copy.message,
-      ratio: ratio.clamp(0.0, 1.0),
+      ratio: rawRatio,
+      progressRatio: rawRatio.clamp(0.0, 1.0),
+      percentage: (rawRatio * 100).round(),
       color: color,
     );
   }
