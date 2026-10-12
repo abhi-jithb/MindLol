@@ -19,6 +19,9 @@ object InstagramReelDetector {
     const val MEDIA_COMPONENT_ID = "com.instagram.android:id/clips_media_component"
     const val SINGLE_MEDIA_COMPONENT_ID = "com.instagram.android:id/clips_single_media_component"
     const val CONTAINER_ID = "com.instagram.android:id/clips_viewer_container"
+    const val COMMENT_THREAD_ID = "com.instagram.android:id/layout_comment_thread"
+    const val COMMENTS_RECYCLER_ID = "com.instagram.android:id/comments_recycler_view"
+    const val COMMENT_COMPOSER_ID = "com.instagram.android:id/comment_composer_container"
 
     private val AUTHOR_REGEX = Regex("""Reel by\s+([^.]+)(?:\.|\b|$)""", RegexOption.IGNORE_CASE)
 
@@ -94,6 +97,32 @@ object InstagramReelDetector {
             authorName = authorName,
             evidence = "CLIPS_VIEW_PAGER_AND_ACTIVE_MEDIA_COMPONENT"
         )
+    }
+
+    /**
+     * Checks whether an Instagram comments sheet or dialog is currently visible over the Reel.
+     */
+    fun isCommentsOpen(rootNode: AccessibilityNodeInfo?): Boolean {
+        if (rootNode == null) return false
+        return isCommentsOpen(AndroidNodeInfo(rootNode))
+    }
+
+    /**
+     * Internal check for comments sheet presence on testable [NodeInfo].
+     */
+    fun isCommentsOpen(root: NodeInfo?): Boolean {
+        if (root == null) return false
+        val commentNodes = root.findByViewId(COMMENT_THREAD_ID) +
+                root.findByViewId(COMMENTS_RECYCLER_ID) +
+                root.findByViewId(COMMENT_COMPOSER_ID)
+        for (node in commentNodes) {
+            val bounds = node.boundsInScreen
+            val height = bounds.bottom - bounds.top
+            if (node.isVisibleToUser && height > 200) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun findViewPagerNode(root: NodeInfo): NodeInfo? {

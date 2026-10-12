@@ -216,4 +216,49 @@ class InstagramReelCounterTest {
         assertEquals(0, newBase.sessionCount)
         assertEquals(ScrollDirection.INITIAL, newBase.direction)
     }
+
+    @Test
+    fun `Test 14 - Scrolling while comments overlay is open is suppressed without incrementing`() {
+        counter.processObservation(viewPagerEvent(0)) // Baseline
+        val res1 = counter.processObservation(viewPagerEvent(1))
+        assertTrue(res1.isCounted)
+        assertEquals(1, res1.sessionCount)
+
+        // User opens comments sheet and scrolls
+        val commentsObs = ReelObservation(
+            isReel = true,
+            eventType = "TYPE_VIEW_SCROLLED",
+            eventClass = "androidx.viewpager.widget.ViewPager",
+            fromIndex = 1,
+            toIndex = 2,
+            isCommentsOpen = true
+        )
+        val commentsRes = counter.processObservation(commentsObs)
+        assertFalse(commentsRes.isCounted)
+        assertEquals(1, commentsRes.sessionCount)
+        assertEquals("COMMENTS_OVERLAY_ACTIVE_IGNORED", commentsRes.evidence)
+    }
+
+    @Test
+    fun `Test 15 - Resuming forward swipe after closing comments increments count normally`() {
+        counter.processObservation(viewPagerEvent(0)) // Baseline
+        counter.processObservation(viewPagerEvent(1)) // count = 1
+
+        // Comments opened
+        val commentsObs = ReelObservation(
+            isReel = true,
+            eventType = "TYPE_VIEW_SCROLLED",
+            eventClass = "androidx.viewpager.widget.ViewPager",
+            fromIndex = 1,
+            toIndex = 1,
+            isCommentsOpen = true
+        )
+        counter.processObservation(commentsObs)
+
+        // Comments closed and swipe forward to index 2
+        val nextReel = counter.processObservation(viewPagerEvent(2))
+        assertTrue(nextReel.isCounted)
+        assertEquals(2, nextReel.sessionCount)
+        assertEquals(ScrollDirection.FORWARD, nextReel.direction)
+    }
 }

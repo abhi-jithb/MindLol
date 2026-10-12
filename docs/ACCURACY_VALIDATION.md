@@ -92,9 +92,68 @@ All automated detector regression tests must utilize sanitized JSON fixtures und
 
 ---
 
-## 5. Known Limitations & Untested Environments
+## 5. Phase 17 Detection Reliability & Lifecycle Hardening
 
-The following areas are explicitly documented as **pending future validation phases** before public release:
-1. **Multi-OEM Behavior**: Samsung OneUI and Xiaomi HyperOS use proprietary window managers and aggressive background-service task killers. Multi-OEM validation is required in Phase 17.
-2. **TalkBack Concurrency**: Overlay and accessibility service must be verified with TalkBack screen reader enabled to ensure no navigation interference for visually impaired users.
-3. **Jetpack Compose Migration**: Target apps periodically migrate surfaces to Compose. When resource IDs are stripped in future release builds, structural fallback heuristics will be validated via hot-patchable Remote Config rules (Phase 16).
+### Defect Analysis & Fixes Implemented
+1. **AccessibilityNodeInfo Leak & Node Exhaustion**:
+   * *Root Cause*: `getBestRootNode` traversed parent chains (`current = current.parent`) without recycling intermediate child nodes. Furthermore, `onAccessibilityEvent` had redundant `rootInActiveWindow` calls and conditional recycling that skipped nodes when matched to active root.
+   * *Fix*: Implemented safe step-wise parent recycling in `getBestRootNode`, recycled non-matching `activeRoot` before fallback, and enclosed all event handling inside `try ... finally { rootNode?.recycle() }`.
+2. **Transient System Framework / SystemUI Event Flickering**:
+   * *Root Cause*: Transient system events (clock ticks, battery icon updates, volume sliders, IME) reporting `packageName == "com.android.systemui"` triggered `isAppEnabled(rawEventPkg) == false` and erroneously called `updateSurfaceState(activePkg, false, "NON_TARGET_APP")`, causing false `STANDBY` state transitions and canceling pending gesture states.
+   * *Fix*: Guarded against system framework packages (`"android"`, `"com.android.systemui"`, and self `packageName`), preserving active target surface state during transient system overlays.
+3. **Instagram Comments Overlay Protection**:
+   * *Root Cause*: `instagram_comments_overlay.json` existed in fixtures but was not wired into `InstagramReelDetector` or `InstagramReelCounter`. Vertical scrolling inside comments could theoretically be processed as ViewPager transitions.
+   * *Fix*: Added `InstagramReelDetector.isCommentsOpen` checking `layout_comment_thread`, `comments_recycler_view`, and `comment_composer_container` (> 200px visible height). Added `isCommentsOpen` to `ReelObservation` and suppressed scroll events in `InstagramReelCounter` with `COMMENTS_OVERLAY_ACTIVE_IGNORED`. Verified with fixture and unit tests.
+4. **Module Parity Synchronization**:
+   * *Fix*: Ensured 100% parity across `android/app/src/main/kotlin/` and `app/src/main/java/`, as well as test suites and test fixtures.
+
+---
+
+## 6. Real-Device Empirical Validation (Phase 17)
+
+### Test Environment
+* **Device**: Vivo V2529 (Physical Hardware ID: `10AFCB07PR003X0`)
+* **OS**: Android 16 (Build: OriginOS / Vivo Android 16)
+* **Target Apps Tested**:
+  * YouTube: version 21.40.161
+  * Instagram: production release
+* **MindLol Build**: Debug (`com.mindlol.probe.debug`)
+
+### Measured Empirical Results
+
+| Scenario | Input Profile | Detected Outcome | Increments | Result |
+| :--- | :--- | :--- | :--- | :--- |
+| **Forward Swipe** | `(500, 1600) -> (500, 400)` in 250ms | `scrollY=631` -> `FORWARD_TRANSITION_DISPLACEMENT` -> `FORWARD_SETTLING` (`-1095px`) -> `SNAP_SETTLED_AT_REST` | +1 (Count 49 -> 50) | ✅ PASS |
+| **Backward Rewatch** | `(500, 400) -> (500, 1600)` in 250ms | `scrollY=-593` -> `BACKWARD_GESTURE_START` -> `BACKWARD_GESTURE_TRACKING` (`-1154px`) -> `SNAP_SETTLED_AT_REST` | 0 (Count preserved 50) | ✅ PASS |
+| **Partial / Cancelled Drag** | `(500, 1200) -> (500, 1050)` in 400ms | `scrollY=44` -> `FORWARD_GESTURE_TRACKING (peak=44)` -> Recoil -> `SNAP_SETTLED_AT_REST` | 0 (Count preserved 50) | ✅ PASS |
+| **App Switching & Home** | Press HOME -> Launcher / PiP mode | Target app leaves foreground; baseline preserved; no crash or leak | 0 (Count preserved 50) | ✅ PASS |
+| **Process Force-Stop & Restart** | `am force-stop` -> Activity restart | Count 50 and limit 100 loaded from `SharedPreferencesStore`; truthful permission banner displayed until service re-established | Preserved (Count 50) | ✅ PASS |
+
+---
+
+## 7. Application Identity & Package Migration Audit
+
+* **Current Identity**:
+  * Root Namespace: `com.mindlol.probe`
+  * Debug Application ID: `com.mindlol.probe.debug`
+  * Production Application ID: `com.mindlol.probe`
+* **Audit Assessment**:
+  * The application ID still carries the legacy `.probe` moniker from Phase 0.
+  * Internal code dynamically resolves package identity via `context.packageName`, so platform channels and accessibility checks do not hardcode `.probe`.
+  * External references exist in:
+    * `android/app/build.gradle.kts` (`namespace`, `applicationId`)
+    * `app/build.gradle.kts` (`namespace`, `applicationId`)
+    * `DEBUG_PROBE.md` (`/sdcard/Android/data/com.mindlol.probe.debug/files/`)
+    * Test mocks in `ActivePackageResolverTest.kt`, `BlockOverlayManagerTest.kt`, `BlockOverlayDecisionEngineTest.kt`.
+* **Migration Plan Before Public Play Store Release**:
+  * Hard requirement per `project.md`: Must migrate to final production package name (e.g. `com.mindlol.app`) BEFORE any closed/open testing track on Google Play.
+  * Preserved in Phase 17 as instructed to prevent breaking local testing and permissions on connected test hardware.
+
+---
+
+## 8. Known Limitations & Untested Environments
+
+1. **Multi-OEM Behavior**: Tested exclusively on Vivo V2529 (Android 16). Behavior on Samsung OneUI (Galaxy S23/S24) and Xiaomi HyperOS remains unverified on physical hardware.
+2. **TalkBack Concurrency**: Concurrency testing with Google TalkBack screen reader enabled is mandatory prior to closed testing release.
+3. **Jetpack Compose Migration**: Target apps periodically migrate surfaces to Compose. Remote Config rule deployment remains required before production rollout.
+

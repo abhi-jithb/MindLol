@@ -8,5 +8,6 @@ data class ReelObservation(
     val eventType: String,
     val eventClass: String,
     val fromIndex: Int,
-    val toIndex: Int
+    val toIndex: Int,
+    val isCommentsOpen: Boolean = false
 )

@@ -61,7 +61,6 @@ class DebugProbeService : AccessibilityService() {
         // Update overlay and HUD decision state
         if (::repository.isInitialized && ::overlayManager.isInitialized) {
             val isLimitReached = repository.isLimitReached()
-            val hasPermission = overlayManager.hasOverlayPermission()
             val appEnabled = isAppEnabled(activePkg)
             val isTarget = activePkg != null &&
                 activePkg in com.mindlol.probe.overlay.BlockOverlayDecisionEngine.DEFAULT_TARGET_PACKAGES &&
@@ -81,6 +80,11 @@ class DebugProbeService : AccessibilityService() {
             }
         }
 
+        if (rawEventPkg == "android" || rawEventPkg == "com.android.systemui" || rawEventPkg == packageName) {
+            // Transient system framework or MindLol HUD/overlay event; do not drop target surface state
+            return
+        }
+
         if (!isAppEnabled(rawEventPkg)) {
             com.mindlol.probe.health.TrackingHealthManager.updateSurfaceState(activePkg, false, "NON_TARGET_APP")
             return
@@ -94,54 +98,28 @@ class DebugProbeService : AccessibilityService() {
         }
         lastEventTimeMs = now
 
-        val activeRoot = rootInActiveWindow
         val rootNode = getBestRootNode(event)
-        val rootClassStr = rootNode?.className?.toString() ?: "null"
-        val isRootFromActive = (rootNode != null && rootNode == activeRoot)
-
-        Log.d(
-            TAG,
-            "[Pipeline 1-4] Event=$eventTypeStr | pkg=$rawEventPkg | eventClass=$eventClassStr | activeRoot=${activeRoot != null} | rootClass=$rootClassStr | sourceFallback=${!isRootFromActive}"
-        )
-
-        var detectionResult: DetectionResult? = null
-
-        if (rawEventPkg == INSTAGRAM_PKG) {
-            val detected = InstagramReelDetector.detect(rootNode)
-            detectionResult = detected
-            com.mindlol.probe.health.TrackingHealthManager.updateSurfaceState(rawEventPkg, detected.isReel, detected.evidence)
+        try {
+            val rootClassStr = rootNode?.className?.toString() ?: "null"
 
             Log.d(
                 TAG,
-                "[Pipeline 5-7] isReel=${detected.isReel} | evidence=${detected.evidence} | pagerBounds=${detected.pagerBounds?.toShortString()} | activeBounds=${detected.activeReelBounds?.toShortString()}"
+                "[Pipeline 1-4] Event=$eventTypeStr | pkg=$rawEventPkg | eventClass=$eventClassStr | rootClass=$rootClassStr"
             )
 
-            if (::floatingHudManager.isInitialized && ::repository.isInitialized) {
-                floatingHudManager.updateHudVisibility(
-                    activePackageName = activePkg,
-                    isShortVideoSurface = detected.isReel,
-                    isLimitReached = repository.isLimitReached(),
-                    isTestUnlocked = overlayManager.isTestUnlocked
+            var detectionResult: DetectionResult? = null
+
+            if (rawEventPkg == INSTAGRAM_PKG) {
+                val detected = InstagramReelDetector.detect(rootNode)
+                detectionResult = detected
+                com.mindlol.probe.health.TrackingHealthManager.updateSurfaceState(rawEventPkg, detected.isReel, detected.evidence)
+
+                Log.d(
+                    TAG,
+                    "[Pipeline 5-7] isReel=${detected.isReel} | evidence=${detected.evidence} | pagerBounds=${detected.pagerBounds?.toShortString()} | activeBounds=${detected.activeReelBounds?.toShortString()}"
                 )
-            }
 
-            val obs = ReelObservation(
-                isReel = detected.isReel,
-                eventType = eventTypeStr,
-                eventClass = eventClassStr,
-                fromIndex = event.fromIndex,
-                toIndex = event.toIndex
-            )
-
-            val counterResult = reelCounter.processObservation(obs)
-
-            if (counterResult.isCounted && ::repository.isInitialized) {
-                repository.incrementCount()
-                // Re-evaluate overlay and HUD state immediately upon new increment
-                if (::overlayManager.isInitialized) {
-                    overlayManager.updateOverlayState(activePkg, repository.isLimitReached())
-                }
-                if (::floatingHudManager.isInitialized) {
+                if (::floatingHudManager.isInitialized && ::repository.isInitialized) {
                     floatingHudManager.updateHudVisibility(
                         activePackageName = activePkg,
                         isShortVideoSurface = detected.isReel,
@@ -149,61 +127,60 @@ class DebugProbeService : AccessibilityService() {
                         isTestUnlocked = overlayManager.isTestUnlocked
                     )
                 }
-            }
 
-            val todayCount = if (::repository.isInitialized) repository.getTodayCount() else 0
-            val dailyLimit = if (::repository.isInitialized) repository.getDailyLimit() else 0
-            val limitReached = if (::repository.isInitialized) repository.isLimitReached() else false
-
-            Log.d(
-                TAG,
-                "[Pipeline 8-10] Obs(isReel=${obs.isReel}, idx=${obs.fromIndex}->${obs.toIndex}) -> CounterResult(isCounted=${counterResult.isCounted}, sessionCount=${counterResult.sessionCount}, todayCount=$todayCount/$dailyLimit, limitReached=$limitReached, dir=${counterResult.direction}, evidence=${counterResult.evidence})"
-            )
-
-            if (BuildConfig.DEBUG) {
-                DetectorEventLogger.logDetectorEvent(event, detected, detectorLogFile)
-                DetectorEventLogger.logCounterEvent(event, counterResult, detected.isReel, counterLogFile)
-                Log.d(TAG, "[Pipeline 11] Recorded detection and counter events to debug log files.")
-            }
-        } else if (rawEventPkg == YOUTUBE_PKG) {
-            val detected = com.mindlol.probe.detector.YouTubeShortsDetector.detect(rootNode)
-            detectionResult = detected
-            com.mindlol.probe.health.TrackingHealthManager.updateSurfaceState(rawEventPkg, detected.isReel, detected.evidence)
-
-            Log.d(
-                TAG,
-                "[YouTube Pipeline 5-7] isShorts=${detected.isReel} | evidence=${detected.evidence} | bounds=${detected.activeReelBounds?.toShortString()}"
-            )
-
-            if (::floatingHudManager.isInitialized && ::repository.isInitialized) {
-                floatingHudManager.updateHudVisibility(
-                    activePackageName = activePkg,
-                    isShortVideoSurface = detected.isReel,
-                    isLimitReached = repository.isLimitReached(),
-                    isTestUnlocked = overlayManager.isTestUnlocked
+                val isCommentsOpen = InstagramReelDetector.isCommentsOpen(rootNode)
+                val obs = ReelObservation(
+                    isReel = detected.isReel,
+                    eventType = eventTypeStr,
+                    eventClass = eventClassStr,
+                    fromIndex = event.fromIndex,
+                    toIndex = event.toIndex,
+                    isCommentsOpen = isCommentsOpen
                 )
-            }
 
-            val isCommentsOpen = YouTubeShortsDetector.isCommentsOpen(rootNode)
-            val obs = ShortsObservation(
-                isShorts = detected.isReel,
-                eventType = eventTypeStr,
-                eventClass = eventClassStr,
-                scrollX = event.scrollX,
-                scrollY = event.scrollY,
-                isCommentsOpen = isCommentsOpen,
-                timestampMs = System.currentTimeMillis()
-            )
+                val counterResult = reelCounter.processObservation(obs)
 
-            val counterResult = shortsCounter.processObservation(obs)
-
-            if (counterResult.isCounted && ::repository.isInitialized) {
-                repository.incrementCount()
-                // Re-evaluate overlay and HUD state immediately upon new increment
-                if (::overlayManager.isInitialized) {
-                    overlayManager.updateOverlayState(activePkg, repository.isLimitReached())
+                if (counterResult.isCounted && ::repository.isInitialized) {
+                    repository.incrementCount()
+                    // Re-evaluate overlay and HUD state immediately upon new increment
+                    if (::overlayManager.isInitialized) {
+                        overlayManager.updateOverlayState(activePkg, repository.isLimitReached())
+                    }
+                    if (::floatingHudManager.isInitialized) {
+                        floatingHudManager.updateHudVisibility(
+                            activePackageName = activePkg,
+                            isShortVideoSurface = detected.isReel,
+                            isLimitReached = repository.isLimitReached(),
+                            isTestUnlocked = overlayManager.isTestUnlocked
+                        )
+                    }
                 }
-                if (::floatingHudManager.isInitialized) {
+
+                val todayCount = if (::repository.isInitialized) repository.getTodayCount() else 0
+                val dailyLimit = if (::repository.isInitialized) repository.getDailyLimit() else 0
+                val limitReached = if (::repository.isInitialized) repository.isLimitReached() else false
+
+                Log.d(
+                    TAG,
+                    "[Pipeline 8-10] Obs(isReel=${obs.isReel}, idx=${obs.fromIndex}->${obs.toIndex}, commentsOpen=$isCommentsOpen) -> CounterResult(isCounted=${counterResult.isCounted}, sessionCount=${counterResult.sessionCount}, todayCount=$todayCount/$dailyLimit, limitReached=$limitReached, dir=${counterResult.direction}, evidence=${counterResult.evidence})"
+                )
+
+                if (BuildConfig.DEBUG) {
+                    DetectorEventLogger.logDetectorEvent(event, detected, detectorLogFile)
+                    DetectorEventLogger.logCounterEvent(event, counterResult, detected.isReel, counterLogFile)
+                    Log.d(TAG, "[Pipeline 11] Recorded detection and counter events to debug log files.")
+                }
+            } else if (rawEventPkg == YOUTUBE_PKG) {
+                val detected = com.mindlol.probe.detector.YouTubeShortsDetector.detect(rootNode)
+                detectionResult = detected
+                com.mindlol.probe.health.TrackingHealthManager.updateSurfaceState(rawEventPkg, detected.isReel, detected.evidence)
+
+                Log.d(
+                    TAG,
+                    "[YouTube Pipeline 5-7] isShorts=${detected.isReel} | evidence=${detected.evidence} | bounds=${detected.activeReelBounds?.toShortString()}"
+                )
+
+                if (::floatingHudManager.isInitialized && ::repository.isInitialized) {
                     floatingHudManager.updateHudVisibility(
                         activePackageName = activePkg,
                         isShortVideoSurface = detected.isReel,
@@ -211,31 +188,58 @@ class DebugProbeService : AccessibilityService() {
                         isTestUnlocked = overlayManager.isTestUnlocked
                     )
                 }
+
+                val isCommentsOpen = YouTubeShortsDetector.isCommentsOpen(rootNode)
+                val obs = ShortsObservation(
+                    isShorts = detected.isReel,
+                    eventType = eventTypeStr,
+                    eventClass = eventClassStr,
+                    scrollX = event.scrollX,
+                    scrollY = event.scrollY,
+                    isCommentsOpen = isCommentsOpen,
+                    timestampMs = System.currentTimeMillis()
+                )
+
+                val counterResult = shortsCounter.processObservation(obs)
+
+                if (counterResult.isCounted && ::repository.isInitialized) {
+                    repository.incrementCount()
+                    // Re-evaluate overlay and HUD state immediately upon new increment
+                    if (::overlayManager.isInitialized) {
+                        overlayManager.updateOverlayState(activePkg, repository.isLimitReached())
+                    }
+                    if (::floatingHudManager.isInitialized) {
+                        floatingHudManager.updateHudVisibility(
+                            activePackageName = activePkg,
+                            isShortVideoSurface = detected.isReel,
+                            isLimitReached = repository.isLimitReached(),
+                            isTestUnlocked = overlayManager.isTestUnlocked
+                        )
+                    }
+                }
+
+                val todayCount = if (::repository.isInitialized) repository.getTodayCount() else 0
+                val dailyLimit = if (::repository.isInitialized) repository.getDailyLimit() else 0
+                val limitReached = if (::repository.isInitialized) repository.isLimitReached() else false
+
+                Log.d(
+                    TAG,
+                    "[YouTube Pipeline 8-10] Obs(isShorts=${obs.isShorts}, scrollY=${obs.scrollY}) -> CounterResult(isCounted=${counterResult.isCounted}, sessionCount=${counterResult.sessionCount}, todayCount=$todayCount/$dailyLimit, limitReached=$limitReached, dir=${counterResult.direction}, evidence=${counterResult.evidence})"
+                )
+
+                if (BuildConfig.DEBUG) {
+                    DetectorEventLogger.logDetectorEvent(event, detected, detectorLogFile)
+                    DetectorEventLogger.logCounterEvent(event, counterResult, detected.isReel, counterLogFile)
+                    Log.d(TAG, "[YouTube Pipeline 11] Recorded detection and counter events to debug log files.")
+                }
             }
-
-            val todayCount = if (::repository.isInitialized) repository.getTodayCount() else 0
-            val dailyLimit = if (::repository.isInitialized) repository.getDailyLimit() else 0
-            val limitReached = if (::repository.isInitialized) repository.isLimitReached() else false
-
-            Log.d(
-                TAG,
-                "[YouTube Pipeline 8-10] Obs(isShorts=${obs.isShorts}, scrollY=${obs.scrollY}) -> CounterResult(isCounted=${counterResult.isCounted}, sessionCount=${counterResult.sessionCount}, todayCount=$todayCount/$dailyLimit, limitReached=$limitReached, dir=${counterResult.direction}, evidence=${counterResult.evidence})"
-            )
 
             if (BuildConfig.DEBUG) {
-                DetectorEventLogger.logDetectorEvent(event, detected, detectorLogFile)
-                DetectorEventLogger.logCounterEvent(event, counterResult, detected.isReel, counterLogFile)
-                Log.d(TAG, "[YouTube Pipeline 11] Recorded detection and counter events to debug log files.")
+                NodeTreeDumper.dumpEventAndTree(event, rootNode, logFile, detectionResult)
             }
-        }
-
-        if (BuildConfig.DEBUG) {
-            NodeTreeDumper.dumpEventAndTree(event, rootNode, logFile, detectionResult)
-        }
-
-        if (rootNode != null && rootNode != rootInActiveWindow) {
+        } finally {
             try {
-                rootNode.recycle()
+                rootNode?.recycle()
             } catch (_: Throwable) {
                 // Ignore safe recycling exception
             }
@@ -251,13 +255,19 @@ class DebugProbeService : AccessibilityService() {
                 if (rootPkg == targetPkg || rootPkg == "android" || rootPkg == INSTAGRAM_PKG || rootPkg == YOUTUBE_PKG) {
                     return activeRoot
                 }
+                // activeRoot does not match target package, recycle it before falling back
+                try {
+                    activeRoot.recycle()
+                } catch (_: Throwable) {}
             }
 
             // Fallback to event source node hierarchy if active window root is from SystemUI or null
-            val source = event.source ?: return activeRoot
-            var current = source
+            var current: AccessibilityNodeInfo = event.source ?: return null
             while (true) {
                 val parent = current.parent ?: break
+                try {
+                    current.recycle()
+                } catch (_: Throwable) {}
                 current = parent
             }
             current

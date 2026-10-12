@@ -239,4 +239,21 @@ class InstagramReelDetectorTest {
         assertFalse(result.isReel)
         assertTrue(result.evidence.contains("INVALID_PAGER_BOUNDS"))
     }
+
+    @Test
+    fun `test 12 - Comments thread panel is detected as open`() {
+        val commentThread = TestNodeInfo(
+            viewIdResourceName = "com.instagram.android:id/layout_comment_thread",
+            boundsInScreen = createRect(0, 800, 1080, 2400)
+        )
+        val root = TestNodeInfo(childrenList = listOf(commentThread))
+        assertTrue(InstagramReelDetector.isCommentsOpen(root))
+    }
+
+    @Test
+    fun `test 13 - Absence of comments thread returns isCommentsOpen false`() {
+        val root = TestNodeInfo(childrenList = emptyList())
+        assertFalse(InstagramReelDetector.isCommentsOpen(root))
+        assertFalse(InstagramReelDetector.isCommentsOpen(null as TestNodeInfo?))
+    }
 }

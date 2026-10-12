@@ -83,4 +83,11 @@ class SanitizedFixtureRegressionTest {
             assertFalse("Fixture $name must not contain usernames", text.contains("username"))
         }
     }
+
+    @Test
+    fun `Test 7 - Instagram comments overlay fixture detected and comments open confirmed`() {
+        val root = SanitizedFixtureLoader.loadFixture("fixtures/instagram_comments_overlay.json")
+        val isCommentsOpen = InstagramReelDetector.isCommentsOpen(root)
+        assertTrue("Instagram comments overlay must be detected as open", isCommentsOpen)
+    }
 }

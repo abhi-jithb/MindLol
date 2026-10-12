@@ -53,6 +53,18 @@ class InstagramReelCounter {
             )
         }
 
+        // 3. Comments bottom sheet is open: ignore all comment scrolling and suppress increment
+        if (obs.isCommentsOpen) {
+            return CounterResult(
+                isCounted = false,
+                sessionCount = sessionCount,
+                direction = ScrollDirection.NONE,
+                previousIndex = lastConfirmedIndex,
+                currentIndex = lastConfirmedIndex,
+                evidence = "COMMENTS_OVERLAY_ACTIVE_IGNORED"
+            )
+        }
+
         val currentIndex = obs.toIndex
 
         // 3. Initial Reel landing: establish baseline without incrementing

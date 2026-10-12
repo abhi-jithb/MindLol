@@ -44,6 +44,7 @@ android {
 }
 
 dependencies {
+    compileOnly("io.flutter:flutter_embedding_debug:1.0.0-1527ae0ec577a4ef50e65f6fefcfc1326707d9bf")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
 
